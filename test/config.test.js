@@ -20,6 +20,6 @@ test('manifest has the fields required by the MeshCentral 1.2.5 and 1.2.6 plugin
     assert.equal(typeof config.downloadUrl, 'string');
     assert.equal(config.configUrl, 'https://raw.githubusercontent.com/maxdorx/meshcentral-inventory/main/config.json');
     assert.equal(config.downloadUrl, 'https://github.com/maxdorx/meshcentral-inventory/archive/refs/heads/main.zip');
-    assert.equal(config.versionHistoryUrl, 'https://api.github.com/repos/maxdorx/meshcentral-inventory/tags');
+    assert.equal(config.versionHistoryUrl, undefined);
     assert.equal(config.meshCentralCompat, '>=1.2.5');
 });
