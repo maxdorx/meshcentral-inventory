@@ -13,13 +13,13 @@ test('manifest has the fields required by the MeshCentral 1.2.5 and 1.2.6 plugin
     }
     assert.equal(config.shortName, 'inventory');
     assert.equal(config.name, 'Inventory');
-    assert.equal(config.version, '1.0.0');
+    assert.equal(config.version, '1.0.1');
     assert.equal(config.hasAdminPanel, true);
     assert.equal(config.repository.type, 'git');
     assert.equal(typeof config.repository.url, 'string');
     assert.equal(typeof config.downloadUrl, 'string');
     assert.equal(config.configUrl, 'https://raw.githubusercontent.com/maxdorx/meshcentral-inventory/main/config.json');
-    assert.equal(config.downloadUrl, 'https://github.com/maxdorx/meshcentral-inventory/archive/refs/heads/main.zip');
+    assert.equal(config.downloadUrl, 'https://github.com/maxdorx/meshcentral-inventory/releases/latest/download/MeshCentral-Inventory.zip');
     assert.equal(config.versionHistoryUrl, undefined);
     assert.equal(config.meshCentralCompat, '>=1.2.5');
 });

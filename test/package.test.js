@@ -461,6 +461,263 @@ test('an agent never merges into a manual workstation and both records receive a
     assert.equal(records.get(manual._id).duplicateConflicts[0].otherAssetId, automatic._id);
 });
 
+test('inventory list is read-only and only returns assets in the users accessible device groups', async () => {
+    const assets = [
+        {
+            _id: 'inventoryasset//allowed-workstation', type: 'inventoryasset', domain: '',
+            assetKind: 'workstation', source: 'automatic', meshid: 'mesh//allowed', name: 'VISIBLE-PC',
+            identity: {}, automatic: {}, manual: {}, assignment: { assignees: [], pending: [] }
+        },
+        {
+            _id: 'inventoryasset//denied-workstation', type: 'inventoryasset', domain: '',
+            assetKind: 'workstation', source: 'automatic', meshid: 'mesh//denied', name: 'HIDDEN-PC',
+            identity: {}, automatic: {}, manual: {}, assignment: { assignees: [], pending: [] }
+        },
+        {
+            _id: 'inventoryasset//manual-workstation', type: 'inventoryasset', domain: '',
+            assetKind: 'workstation', source: 'manual', name: 'ADMIN-ONLY-MANUAL',
+            identity: {}, automatic: {}, manual: {}, assignment: { assignees: [], pending: [] }
+        },
+        {
+            _id: 'inventoryasset//allowed-peripheral', type: 'inventoryasset', domain: '',
+            assetKind: 'peripheral', source: 'manual', name: 'VISIBLE-MOUSE', scope: { meshid: 'mesh//allowed' },
+            identity: {}, automatic: {}, manual: {}, assignment: { assignees: [], pending: [] }
+        },
+        {
+            _id: 'inventoryasset//denied-peripheral', type: 'inventoryasset', domain: '',
+            assetKind: 'peripheral', source: 'manual', name: 'HIDDEN-KEYBOARD', scope: { meshid: 'mesh//denied' },
+            identity: {}, automatic: {}, manual: {}, assignment: { assignees: [], pending: [] }
+        },
+        {
+            _id: 'inventoryasset//unscoped-peripheral', type: 'inventoryasset', domain: '',
+            assetKind: 'peripheral', source: 'manual', name: 'ADMIN-ONLY-MOUSE',
+            identity: {}, automatic: {}, manual: {}, assignment: { assignees: [], pending: [] }
+        }
+    ];
+    let inventoryReads = 0;
+    let writes = 0;
+    const database = {
+        Get() {},
+        GetAllTypeNoTypeField(type, domain, callback) {
+            if (type === 'inventoryasset') inventoryReads++;
+            callback(null, type === 'inventoryasset' ? assets : []);
+        },
+        Set(document, callback) { writes++; callback(null); },
+        Remove() {}
+    };
+    const pluginHandler = {
+        parent: {
+            db: database,
+            webserver: { GetAllMeshIdWithRights() { return ['mesh//allowed']; } },
+            config: { domains: { '': {} } }
+        },
+        registerPermissions() {},
+        getAccessPermissions() { return Promise.resolve(() => true); }
+    };
+    const plugin = require('../inventory').inventory(pluginHandler);
+    const session = {
+        domain: { id: '' }, user: { _id: 'user//operator', domain: '', siteadmin: 0 },
+        ws: { send(message) { session.response(JSON.parse(message)); } }
+    };
+    const response = await new Promise((resolve) => {
+        session.response = resolve;
+        plugin.serveraction({ requestId: 'scoped-list', pluginaction: 'list' }, session);
+    });
+
+    assert.equal(response.ok, true);
+    assert.deepEqual(response.result.assets.map((asset) => asset.name), ['VISIBLE-MOUSE', 'VISIBLE-PC']);
+    assert.equal(response.result.capabilities.canCreateManualWorkstation, false);
+    assert.equal(inventoryReads, 1);
+    assert.equal(writes, 0);
+});
+
+test('a scoped manager cannot link a peripheral to a workstation outside their device groups', async () => {
+    const assets = [
+        {
+            _id: 'inventoryasset//allowed-workstation', type: 'inventoryasset', domain: '',
+            assetKind: 'workstation', source: 'automatic', meshid: 'mesh//allowed', name: 'VISIBLE-PC',
+            identity: { serial: 'VISIBLE-SERIAL' }, automatic: {}, manual: {}, assignment: { assignees: [], pending: [] }
+        },
+        {
+            _id: 'inventoryasset//denied-workstation', type: 'inventoryasset', domain: '',
+            assetKind: 'workstation', source: 'automatic', meshid: 'mesh//denied', name: 'HIDDEN-PC',
+            identity: { serial: 'HIDDEN-SERIAL' }, automatic: {}, manual: {}, assignment: { assignees: [], pending: [] }
+        }
+    ];
+    const database = {
+        Get() {}, Set() {}, Remove() {},
+        GetAllTypeNoTypeField(type, domain, callback) { callback(null, type === 'inventoryasset' ? assets : []); }
+    };
+    const pluginHandler = {
+        parent: {
+            db: database,
+            webserver: { GetAllMeshIdWithRights() { return ['mesh//allowed']; } },
+            config: { domains: { '': {} } }
+        },
+        registerPermissions() {},
+        getAccessPermissions() { return Promise.resolve(() => true); }
+    };
+    const plugin = require('../inventory').inventory(pluginHandler);
+    const session = {
+        domain: { id: '' }, user: { _id: 'user//manager', domain: '', siteadmin: 0 },
+        ws: { send(message) { session.response(JSON.parse(message)); } }
+    };
+    const invoke = (rows) => new Promise((resolve) => {
+        session.response = resolve;
+        plugin.serveraction({ requestId: `scoped-preview-${rows[0].rowNumber}`, pluginaction: 'peripheral-preview', rows }, session);
+    });
+
+    let response = await invoke([{ rowNumber: 2, type: 'Mouse', name: 'Mouse', linked_workstation: 'HIDDEN-SERIAL' }]);
+    assert.equal(response.ok, true);
+    assert.equal(response.result.rows[0].linkedWorkstation, null);
+    assert.ok(response.result.rows[0].errors.some((error) => error.includes('was not found')));
+    assert.ok(response.result.rows[0].errors.some((error) => error.includes('accessible device group')));
+
+    response = await invoke([{ rowNumber: 3, type: 'Mouse', name: 'Mouse', linked_workstation: 'VISIBLE-SERIAL' }]);
+    assert.equal(response.ok, true);
+    assert.deepEqual(response.result.rows[0].errors, []);
+    assert.equal(response.result.rows[0].linkedWorkstation.name, 'VISIBLE-PC');
+});
+
+test('manual workstation creation is restricted to full administrators', async () => {
+    let writes = 0;
+    const database = {
+        Get() {}, Remove() {},
+        GetAllTypeNoTypeField(type, domain, callback) { callback(null, []); },
+        Set(document, callback) { writes++; callback(null); }
+    };
+    const pluginHandler = {
+        parent: {
+            db: database,
+            webserver: { GetAllMeshIdWithRights() { return ['mesh//allowed']; } },
+            config: { domains: { '': {} } }
+        },
+        registerPermissions() {},
+        getAccessPermissions() { return Promise.resolve(() => true); }
+    };
+    const plugin = require('../inventory').inventory(pluginHandler);
+    const session = {
+        domain: { id: '' }, user: { _id: 'user//manager', domain: '', siteadmin: 0 },
+        ws: { send(message) { session.response(JSON.parse(message)); } }
+    };
+    const response = await new Promise((resolve) => {
+        session.response = resolve;
+        plugin.serveraction({
+            requestId: 'manual-workstation-denied', pluginaction: 'workstation-create',
+            workstation: { name: 'Unauthorized manual workstation', serial: 'NOPE-001' }
+        }, session);
+    });
+
+    assert.equal(response.ok, false);
+    assert.match(response.error, /full administrator/i);
+    assert.equal(writes, 0);
+});
+
+test('full synchronization loads the inventory collection once for all nodes', async () => {
+    const nodes = [
+        { _id: 'node//one', domain: '', meshid: 'mesh//group-1', name: 'PC-ONE', users: [], agent: { id: 4, ver: 126 } },
+        { _id: 'node//two', domain: '', meshid: 'mesh//group-1', name: 'PC-TWO', users: [], agent: { id: 4, ver: 126 } },
+        { _id: 'node//three', domain: '', meshid: 'mesh//group-1', name: 'PC-THREE', users: [], agent: { id: 4, ver: 126 } }
+    ];
+    const sysinfos = nodes.map((node, index) => ({
+        _id: `si${node._id}`, domain: '', type: 'sysinfo', time: 1000 + index,
+        hardware: { identifiers: {
+            chassis_serial: `SERIAL-${index + 1}`,
+            product_uuid: `00000000-0000-4000-8000-00000000000${index + 1}`
+        } }
+    }));
+    const existingWorkstation = {
+        _id: 'inventoryasset//existing-one', type: 'inventoryasset', domain: '',
+        assetKind: 'workstation', source: 'automatic', nodeid: nodes[0]._id, nodeids: [nodes[0]._id],
+        meshid: 'mesh//group-1', name: 'PC-ONE', identity: { serial: 'SERIAL-1', uuid: '00000000-0000-4000-8000-000000000001' },
+        automatic: { nodeExists: true }, manual: {}, assignment: { assignees: [], pending: [] }, history: []
+    };
+    const linkedPeripheral = {
+        _id: 'inventoryasset//linked-mouse', type: 'inventoryasset', domain: '',
+        assetKind: 'peripheral', source: 'manual', name: 'PC-ONE mouse', identity: { serial: 'MOUSE-ONE' },
+        links: { workstationAssetId: existingWorkstation._id, workstationName: existingWorkstation.name },
+        automatic: {}, manual: {}, peripheral: { type: 'Mouse' }, assignment: { assignees: [], pending: [] }, history: []
+    };
+    let inventoryReads = 0;
+    const saved = [];
+    const database = {
+        Get() {}, Remove() {},
+        GetAllTypeNoTypeField(type, domain, callback) {
+            if (type === 'node') return callback(null, nodes);
+            if (type === 'sysinfo') return callback(null, sysinfos);
+            if (type === 'lastconnect') return callback(null, []);
+            if (type === 'inventoryasset') {
+                inventoryReads++;
+                return callback(null, [existingWorkstation, linkedPeripheral]);
+            }
+            callback(null, []);
+        },
+        Set(document, callback) { saved.push(JSON.parse(JSON.stringify(document))); callback(null); }
+    };
+    const pluginHandler = {
+        parent: {
+            db: database,
+            webserver: { meshes: { 'mesh//group-1': { name: 'Managed PCs' } }, wsagents: {} },
+            config: { domains: { '': {} } }
+        },
+        registerPermissions() {},
+        getAccessPermissions() { return Promise.resolve(() => true); }
+    };
+    const plugin = require('../inventory').inventory(pluginHandler);
+    const session = {
+        domain: { id: '' }, user: { _id: 'user//admin', domain: '', siteadmin: 0xFFFFFFFF },
+        ws: { send(message) { session.response(JSON.parse(message)); } }
+    };
+    const response = await new Promise((resolve) => {
+        session.response = resolve;
+        plugin.serveraction({ requestId: 'one-pass-rescan', pluginaction: 'rescan' }, session);
+    });
+
+    assert.equal(response.ok, true);
+    assert.equal(inventoryReads, 1);
+    assert.equal(new Set(saved.map((asset) => asset.nodeid).filter(Boolean)).size, 3);
+    const savedPeripheral = saved.find((asset) => asset._id === linkedPeripheral._id);
+    assert.equal(savedPeripheral.scope.meshid, 'mesh//group-1');
+    assert.equal(savedPeripheral.links.workstationMeshId, 'mesh//group-1');
+});
+
+test('automatic workstation updates reject invalid dates without writing', async () => {
+    const asset = {
+        _id: 'inventoryasset//automatic-date', type: 'inventoryasset', domain: '', assetKind: 'workstation', source: 'automatic',
+        nodeid: 'node//date', nodeids: ['node//date'], meshid: 'mesh//group-1', name: 'DATE-PC', status: 'Available',
+        identity: {}, automatic: { nodeExists: true }, manual: { purchaseDate: '' },
+        assignment: { mode: 'unassigned', assignees: [], pending: [] }, history: []
+    };
+    let writes = 0;
+    const database = {
+        Get(id, callback) { callback(null, id === asset._id ? [asset] : []); },
+        GetAllTypeNoTypeField(type, domain, callback) { callback(null, type === 'inventoryasset' ? [asset] : []); },
+        Set(document, callback) { writes++; callback(null); }, Remove() {}
+    };
+    const pluginHandler = {
+        parent: { db: database, webserver: {}, config: { domains: { '': {} } } },
+        registerPermissions() {},
+        getAccessPermissions() { return Promise.resolve(() => true); }
+    };
+    const plugin = require('../inventory').inventory(pluginHandler);
+    const session = {
+        domain: { id: '' }, user: { _id: 'user//admin', domain: '', siteadmin: 0xFFFFFFFF },
+        ws: { send(message) { session.response(JSON.parse(message)); } }
+    };
+    const response = await new Promise((resolve) => {
+        session.response = resolve;
+        plugin.serveraction({
+            requestId: 'invalid-date', pluginaction: 'update', assetId: asset._id,
+            changes: { purchaseDate: 'not-a-date' }
+        }, session);
+    });
+
+    assert.equal(response.ok, false);
+    assert.match(response.error, /Purchase date must be/);
+    assert.equal(writes, 0);
+    assert.equal(asset.manual.purchaseDate, '');
+});
+
 test('browser application script is valid JavaScript after boot data is rendered', () => {
     const template = fs.readFileSync(path.join(root, 'views', 'inventory.handlebars'), 'utf8');
     assert.match(template, /id="typeFilter"/);

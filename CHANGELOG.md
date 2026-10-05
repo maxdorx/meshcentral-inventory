@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.1 - 2026-10-05
+
+- Scoped manual inventory visibility to full administrators or the linked workstation's accessible device group.
+- Prevented peripheral linking and validation responses from exposing inaccessible workstation records.
+- Made dashboard list requests read-only; synchronization now requires the explicit permission or runs at trusted startup/agent hooks.
+- Loaded and indexed inventory records once per full synchronization instead of once per node.
+- Serialized all inventory mutations and applied consistent server-side date validation.
+- Changed URL installations to a fixed-name asset from the latest published GitHub release while retaining versioned release archives.
+- Kept the intentional Modern UI enforcement unchanged.
+
 ## 1.0.0 - 2026-10-05
 
 - First stable public release.

@@ -10,6 +10,7 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
 $dist = Join-Path $project "dist"
 $stage = Join-Path $dist (".inventory-stage-" + [guid]::NewGuid().ToString("N"))
 $archive = Join-Path $dist "MeshCentral-Inventory-$Version.zip"
+$latestArchive = Join-Path $dist "MeshCentral-Inventory.zip"
 
 New-Item -ItemType Directory -Path (Join-Path $stage "lib") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $stage "views") -Force | Out-Null
@@ -55,5 +56,7 @@ try {
 }
 
 Remove-Item -LiteralPath $stage -Recurse -Force
+Copy-Item -LiteralPath $archive -Destination $latestArchive -Force
 
 Write-Output $archive
+Write-Output $latestArchive

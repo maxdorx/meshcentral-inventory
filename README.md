@@ -48,7 +48,8 @@ Full administrators can configure plugin permissions from **My Server → Plugin
 - The first valid signed-in user becomes the assignee. Later users require administrator review.
 - Removed MeshCentral nodes remain as retained inventory records until manually deleted.
 - Manual workstations remain separate from agent-backed workstations. Duplicate serial numbers, UUIDs, and asset tags are blocked or flagged for review.
-- Peripherals are manual records and can optionally link to a workstation.
+- Unscoped manual workstations and peripherals are visible only to full administrators.
+- A peripheral linked to an agent-backed workstation inherits that workstation's device-group visibility.
 - Peripheral CSV import validates the complete file before saving any rows.
 - Inventory records are stored in MeshCentral's configured database.
 - Enabling Inventory uses MeshCentral's Modern UI. Modern themes remain available.

@@ -371,7 +371,7 @@
     var state = {
         assets: [], selected: null, permissions: boot.permissions || [], loading: false,
         cardFilter: '', pendingListRequestId: '', pendingRequests: {}, requestedAssetId: '', activeTab: 'workstations',
-        peripheralTypes: boot.peripheralTypes || ['Mouse', 'Keyboard', 'Headset', 'Monitor', 'Other'],
+        peripheralTypes: boot.peripheralTypes || ['Mouse', 'Keyboard', 'Headset', 'Monitor', 'Other'], capabilities: {},
         importRows: [], importPreview: [], keepAddAnother: false, page: 1, pageSize: 25
     };
     var requestCounter = 0;
@@ -533,7 +533,7 @@
         byId('sectionTitle').textContent = peripherals ? 'Peripherals' : 'Workstations';
         byId('sectionSubtitle').textContent = peripherals ? 'Manual inventory for monitors, mice, keyboards, headsets, and other peripherals' : 'Automatic agent inventory and separate manual workstation records';
         byId('rescanButton').classList.toggle('inv-hidden', peripherals || !can('can_sync'));
-        byId('addWorkstationButton').classList.toggle('inv-hidden', peripherals || !can('can_manage'));
+        byId('addWorkstationButton').classList.toggle('inv-hidden', peripherals || !can('can_manage') || !state.capabilities.canCreateManualWorkstation);
         byId('templateButton').classList.toggle('inv-hidden', !peripherals || !can('can_manage'));
         byId('importButton').classList.toggle('inv-hidden', !peripherals || !can('can_manage'));
         byId('addPeripheralButton').classList.toggle('inv-hidden', !peripherals || !can('can_manage'));
@@ -1300,6 +1300,7 @@
             state.assets = result.assets || [];
             state.permissions = result.permissions || state.permissions;
             state.peripheralTypes = result.peripheralTypes || state.peripheralTypes;
+            state.capabilities = result.capabilities || state.capabilities;
             setActiveTab(state.activeTab, false);
             if (boot.nodeid) {
                 var matching = state.assets.find(function (asset) { return asset.nodeid === boot.nodeid || (asset.nodeids || []).indexOf(boot.nodeid) >= 0; });

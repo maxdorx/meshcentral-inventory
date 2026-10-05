@@ -123,28 +123,54 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         const automatic = workstations.filter((asset) => !isManualWorkstation(asset));
         const desired = new Map(workstations.map((asset) => [asset._id, []]));
 
+        const automaticByIdentifier = {
+            uuid: new Map(),
+            serial: new Map(),
+            assetTag: new Map()
+        };
+        function indexAutomatic(field, value, asset) {
+            if (!value) return;
+            const matches = automaticByIdentifier[field].get(value) || [];
+            matches.push(asset);
+            automaticByIdentifier[field].set(value, matches);
+        }
+        for (const automaticAsset of automatic) {
+            const identifiers = workstationIdentifiers(automaticAsset);
+            indexAutomatic('uuid', identifiers.uuid, automaticAsset);
+            indexAutomatic('serial', identifiers.serial, automaticAsset);
+            indexAutomatic('assetTag', identifiers.assetTag, automaticAsset);
+        }
+
         for (const manualAsset of manual) {
             const left = workstationIdentifiers(manualAsset);
-            for (const automaticAsset of automatic) {
-                const right = workstationIdentifiers(automaticAsset);
-                const matches = [];
-                if (left.uuid && right.uuid && left.uuid === right.uuid) matches.push('UUID');
-                if (left.serial && right.serial && left.serial === right.serial) matches.push('serial');
-                if (left.assetTag && right.assetTag && left.assetTag === right.assetTag) matches.push('asset tag');
-                if (matches.length === 0) continue;
+            const matchesByAsset = new Map();
+            for (const field of [
+                { key: 'uuid', label: 'UUID' },
+                { key: 'serial', label: 'serial' },
+                { key: 'assetTag', label: 'asset tag' }
+            ]) {
+                if (!left[field.key]) continue;
+                for (const automaticAsset of automaticByIdentifier[field.key].get(left[field.key]) || []) {
+                    const match = matchesByAsset.get(automaticAsset._id) || { asset: automaticAsset, matches: [] };
+                    match.matches.push(field.label);
+                    matchesByAsset.set(automaticAsset._id, match);
+                }
+            }
+            for (const match of matchesByAsset.values()) {
+                const automaticAsset = match.asset;
                 desired.get(manualAsset._id).push({
                     kind: 'cross-source-duplicate',
                     otherAssetId: automaticAsset._id,
                     otherName: automaticAsset.name || automaticAsset._id,
                     otherSource: 'automatic',
-                    matches
+                    matches: match.matches
                 });
                 desired.get(automaticAsset._id).push({
                     kind: 'cross-source-duplicate',
                     otherAssetId: manualAsset._id,
                     otherName: manualAsset.name || manualAsset._id,
                     otherSource: 'manual',
-                    matches
+                    matches: match.matches
                 });
             }
         }
@@ -167,8 +193,8 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         }
     }
 
-    function availableAssetId(domain, seed, nodeid, assets) {
-        const occupied = new Set((assets || []).map((item) => item && item._id).filter(Boolean));
+    function availableAssetId(domain, seed, nodeid, assets, occupiedIds) {
+        const occupied = occupiedIds || new Set((assets || []).map((item) => item && item._id).filter(Boolean));
         let id = assetId(domain, seed);
         if (!occupied.has(id)) return id;
 
@@ -184,6 +210,44 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         return id;
     }
 
+    function addIndexedAsset(map, key, asset) {
+        if (!key) return;
+        const values = map.get(key) || [];
+        if (!values.some((item) => item._id === asset._id)) values.push(asset);
+        map.set(key, values);
+    }
+
+    function indexSyncAsset(state, asset) {
+        if (!asset || !isWorkstation(asset) || isManualWorkstation(asset)) return;
+        for (const nodeid of [asset.nodeid].concat(asset.nodeids || [])) {
+            if (nodeid) state.byNodeId.set(nodeid, asset);
+        }
+        addIndexedAsset(state.byUuid, model.normalizeUuid(asset.identity && asset.identity.uuid), asset);
+        addIndexedAsset(state.bySerial, model.normalizeSerial(asset.identity && asset.identity.serial), asset);
+    }
+
+    function createSyncState(assets) {
+        const state = {
+            assets: Array.isArray(assets) ? assets : [],
+            occupiedIds: new Set(),
+            byNodeId: new Map(),
+            byUuid: new Map(),
+            bySerial: new Map()
+        };
+        for (const asset of state.assets) {
+            if (asset && asset._id) state.occupiedIds.add(asset._id);
+            indexSyncAsset(state, asset);
+        }
+        return state;
+    }
+
+    function selectIndexedAsset(state, snapshot) {
+        const candidates = new Map();
+        for (const asset of state.byUuid.get(snapshot.uuid) || []) candidates.set(asset._id, asset);
+        for (const asset of state.bySerial.get(snapshot.serial) || []) candidates.set(asset._id, asset);
+        return model.selectAsset(Array.from(candidates.values()), snapshot);
+    }
+
     function meshName(meshid) {
         const server = webServer();
         return server && server.meshes && server.meshes[meshid] ? server.meshes[meshid].name : '';
@@ -194,24 +258,15 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         return Boolean(server && server.wsagents && server.wsagents[nodeid]);
     }
 
-    async function syncNode(node, suppliedSysinfo, source, authoritativeUsers, suppliedLastConnectTime, deferDuplicateReconcile) {
-        // The default MeshCentral domain is the valid empty string.
-        if (!node || !node._id || node.domain === null || node.domain === undefined) return null;
-        // One queue per domain makes the read-match-create sequence atomic inside
-        // this MeshCentral process. This prevents two agents with the same
-        // serial/UUID from creating duplicate inventory records concurrently.
-        return withQueue(`domain:${node.domain}`, async () => {
+    async function syncNodeWithState(node, suppliedSysinfo, source, authoritativeUsers, suppliedLastConnectTime, deferDuplicateReconcile, state) {
             const domain = node.domain;
-            const assets = await dbAll('inventoryasset', domain);
-            // Manual workstations are a separate inventory source. An agent may
-            // never adopt, merge into, or overwrite one of those records.
-            const workstations = assets.filter((item) => isWorkstation(item) && !isManualWorkstation(item));
+            const assets = state.assets;
             let sysinfo = suppliedSysinfo;
-            if (!sysinfo) sysinfo = await dbGet(`si${node._id}`);
+            if (sysinfo === undefined) sysinfo = await dbGet(`si${node._id}`);
 
             const snapshot = model.snapshotFrom(node, sysinfo, meshName(node.meshid), isOnline(node._id), suppliedLastConnectTime);
             if (typeof authoritativeUsers === 'boolean') snapshot.userReportAuthoritative = authoritativeUsers;
-            let asset = workstations.find((item) => item.nodeid === node._id || (Array.isArray(item.nodeids) && item.nodeids.includes(node._id)));
+            let asset = state.byNodeId.get(node._id) || null;
             let conflicts = [];
 
             // Repair legacy false merges caused by firmware placeholder serials.
@@ -245,12 +300,13 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                     asset.updatedAt = Date.now();
                     model.addHistory(asset, 'node.unlinked', 'synchronizer', `Unlinked ${node._id} while repairing a legacy placeholder-serial merge.`, asset.updatedAt);
                     await dbSet(asset);
+                    state.byNodeId.delete(node._id);
                     asset = null;
                 }
             }
 
             if (!asset) {
-                const selection = model.selectAsset(workstations, snapshot);
+                const selection = selectIndexedAsset(state, snapshot);
                 asset = selection.asset;
                 conflicts = selection.conflicts;
             }
@@ -258,68 +314,101 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
             const now = Date.now();
             if (!asset) {
                 const seed = snapshot.uuid || snapshot.serial || snapshot.nodeid;
-                asset = model.createAsset(availableAssetId(domain, seed, snapshot.nodeid, assets), domain, snapshot, now);
+                asset = model.createAsset(availableAssetId(domain, seed, snapshot.nodeid, assets, state.occupiedIds), domain, snapshot, now);
+                assets.push(asset);
+                state.occupiedIds.add(asset._id);
             }
 
             asset.type = 'inventoryasset';
             asset.domain = domain;
             model.applySnapshot(asset, snapshot, now, source || 'system', conflicts);
             await dbSet(asset);
+            indexSyncAsset(state, asset);
             if (deferDuplicateReconcile !== true) {
-                const currentAssets = assets.filter((item) => item._id !== asset._id).concat([asset]);
-                await reconcileCrossSourceDuplicates(domain, currentAssets, source || 'system', now);
+                await reconcileCrossSourceDuplicates(domain, assets, source || 'system', now);
             }
             return asset;
+    }
+
+    async function syncNode(node, suppliedSysinfo, source, authoritativeUsers, suppliedLastConnectTime, deferDuplicateReconcile) {
+        // The default MeshCentral domain is the valid empty string.
+        if (!node || !node._id || node.domain === null || node.domain === undefined) return null;
+        // One queue per domain makes the read-match-create sequence atomic inside
+        // this MeshCentral process. This prevents two agents with the same
+        // serial/UUID from creating duplicate inventory records concurrently.
+        return withQueue(`domain:${node.domain}`, async () => {
+            const assets = await dbAll('inventoryasset', node.domain);
+            return syncNodeWithState(node, suppliedSysinfo, source, authoritativeUsers, suppliedLastConnectTime, deferDuplicateReconcile, createSyncState(assets));
         });
     }
 
     async function scanDomain(domain, force) {
         const now = Date.now();
         if (!force && lastDomainScan.has(domain) && (now - lastDomainScan.get(domain)) < SCAN_TTL_MS) return;
-        lastDomainScan.set(domain, now);
+        return withQueue(`domain:${domain}`, async () => {
+            const queuedAt = Date.now();
+            if (!force && lastDomainScan.has(domain) && (queuedAt - lastDomainScan.get(domain)) < SCAN_TTL_MS) return;
 
-        const nodes = await dbAll('node', domain);
-        const sysinfos = await dbAll('sysinfo', domain);
-        const lastConnects = await dbAll('lastconnect', domain);
-        const sysinfoByNode = new Map();
-        for (const sysinfo of sysinfos) {
-            if (typeof sysinfo._id === 'string' && sysinfo._id.startsWith('sinode/')) {
-                sysinfoByNode.set(sysinfo._id.substring(2), sysinfo);
+            const [nodes, sysinfos, lastConnects, assets] = await Promise.all([
+                dbAll('node', domain),
+                dbAll('sysinfo', domain),
+                dbAll('lastconnect', domain),
+                dbAll('inventoryasset', domain)
+            ]);
+            const state = createSyncState(assets);
+            const sysinfoByNode = new Map();
+            for (const sysinfo of sysinfos) {
+                if (typeof sysinfo._id === 'string' && sysinfo._id.startsWith('sinode/')) {
+                    sysinfoByNode.set(sysinfo._id.substring(2), sysinfo);
+                }
             }
-        }
-        const lastConnectByNode = new Map();
-        for (const record of lastConnects) {
-            if (typeof record._id === 'string' && record._id.startsWith('lcnode/')) {
-                lastConnectByNode.set(record._id.substring(2), Number(record.time) || null);
+            const lastConnectByNode = new Map();
+            for (const record of lastConnects) {
+                if (typeof record._id === 'string' && record._id.startsWith('lcnode/')) {
+                    lastConnectByNode.set(record._id.substring(2), Number(record.time) || null);
+                }
             }
-        }
 
-        for (const node of nodes) {
-            if (!node || node.deleted === true || !node._id) continue;
-            await syncNode(node, sysinfoByNode.get(node._id), 'synchronizer', false, lastConnectByNode.get(node._id), true);
-        }
-
-        const activeNodeIds = new Set(nodes.filter((node) => node && !node.deleted).map((node) => node._id));
-        const assets = await dbAll('inventoryasset', domain);
-        for (const asset of assets) {
-            if (isPeripheral(asset) || isManualWorkstation(asset)) continue;
-            const linked = (asset.nodeids || []).some((nodeid) => activeNodeIds.has(nodeid));
-            if (!linked && asset.automatic && (asset.automatic.online !== false || asset.automatic.nodeExists !== false)) {
-                asset.type = 'inventoryasset';
-                asset.domain = domain;
-                asset.automatic.online = false;
-                asset.automatic.nodeExists = false;
-                asset.updatedAt = now;
-                model.addHistory(asset, 'node.missing', 'synchronizer', 'MeshCentral node is no longer present; inventory retained.', now);
-                await dbSet(asset);
-            } else if (linked && asset.automatic) {
-                asset.type = 'inventoryasset';
-                asset.domain = domain;
-                asset.automatic.nodeExists = true;
-                await dbSet(asset);
+            for (const node of nodes) {
+                if (!node || node.deleted === true || !node._id) continue;
+                await syncNodeWithState(node, sysinfoByNode.get(node._id) || null, 'synchronizer', false, lastConnectByNode.get(node._id), true, state);
             }
-        }
-        await reconcileCrossSourceDuplicates(domain, null, 'synchronizer', now);
+
+            const activeNodeIds = new Set(nodes.filter((node) => node && !node.deleted).map((node) => node._id));
+            const assetsById = new Map(state.assets.map((asset) => [asset._id, asset]));
+            for (const asset of state.assets) {
+                if (isPeripheral(asset)) {
+                    if (asset.links && asset.links.workstationAssetId) {
+                        const linkedWorkstation = assetsById.get(asset.links.workstationAssetId);
+                        const linkedScope = assetScopeMeshId(linkedWorkstation);
+                        if (linkedWorkstation && linkedScope && linkedScope !== assetScopeMeshId(asset)) {
+                            applyPeripheralScope(asset, linkedWorkstation);
+                            asset.updatedAt = now;
+                            await dbSet(asset);
+                        }
+                    }
+                    continue;
+                }
+                if (isManualWorkstation(asset)) continue;
+                const linked = (asset.nodeids || []).some((nodeid) => activeNodeIds.has(nodeid));
+                if (!linked && asset.automatic && (asset.automatic.online !== false || asset.automatic.nodeExists !== false)) {
+                    asset.type = 'inventoryasset';
+                    asset.domain = domain;
+                    asset.automatic.online = false;
+                    asset.automatic.nodeExists = false;
+                    asset.updatedAt = now;
+                    model.addHistory(asset, 'node.missing', 'synchronizer', 'MeshCentral node is no longer present; inventory retained.', now);
+                    await dbSet(asset);
+                } else if (linked && asset.automatic && asset.automatic.nodeExists !== true) {
+                    asset.type = 'inventoryasset';
+                    asset.domain = domain;
+                    asset.automatic.nodeExists = true;
+                    await dbSet(asset);
+                }
+            }
+            await reconcileCrossSourceDuplicates(domain, state.assets, 'synchronizer', now);
+            lastDomainScan.set(domain, Date.now());
+        });
     }
 
     function safeJson(value) {
@@ -331,16 +420,39 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         return pluginHandler.getAccessPermissions('inventory', user, context || {});
     }
 
-    function visibleToUser(asset, user) {
-        if (!asset || !user || asset.domain !== user.domain) return false;
-        if (user.siteadmin === 0xFFFFFFFF) return true;
-        if (isPeripheral(asset)) return true;
-        const server = webServer();
-        if (!server || typeof server.GetAllMeshIdWithRights !== 'function') return false;
-        return server.GetAllMeshIdWithRights(user).includes(asset.meshid);
+    function isFullAdmin(user) {
+        return Boolean(user && user.siteadmin === 0xFFFFFFFF);
     }
 
-    function publicAsset(asset, includeHistory) {
+    function assetScopeMeshId(asset) {
+        if (!asset) return '';
+        if (isWorkstation(asset) && !isManualWorkstation(asset)) return model.text(asset.meshid, 256);
+        return model.text(
+            (asset.scope && asset.scope.meshid)
+            || (asset.links && asset.links.workstationMeshId),
+            256
+        );
+    }
+
+    function userMeshIds(user) {
+        const server = webServer();
+        if (!server || typeof server.GetAllMeshIdWithRights !== 'function') return [];
+        const result = server.GetAllMeshIdWithRights(user);
+        return Array.isArray(result) ? result : [];
+    }
+
+    function visibleToUser(asset, user, accessibleMeshIds) {
+        if (!asset || !user || asset.domain !== user.domain) return false;
+        if (isFullAdmin(user)) return true;
+        const meshid = assetScopeMeshId(asset);
+        // Manual assets without a device-group scope are domain-wide records
+        // and are intentionally visible only to full administrators.
+        const allowed = accessibleMeshIds || new Set(userMeshIds(user));
+        return Boolean(meshid && allowed.has(meshid));
+    }
+
+    function publicAsset(asset, includeHistory, user) {
+        const fullAdmin = isFullAdmin(user);
         const result = {
             id: asset._id,
             nodeid: asset.nodeid || '',
@@ -357,15 +469,24 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
             manual: asset.manual || {},
             peripheral: asset.peripheral || {},
             links: asset.links || {},
+            scope: asset.scope || {},
             assignment: asset.assignment || { mode: 'unassigned', assignees: [], pending: [] },
             observedUsers: asset.observedUsers || [],
             identityConflicts: asset.identityConflicts || [],
-            duplicateConflicts: asset.duplicateConflicts || [],
+            duplicateConflicts: fullAdmin ? (asset.duplicateConflicts || []) : (asset.duplicateConflicts || []).map((conflict) => ({
+                kind: conflict.kind,
+                matches: Array.isArray(conflict.matches) ? conflict.matches : []
+            })),
             identityResolutions: asset.identityResolutions || [],
             createdAt: asset.createdAt || null,
             updatedAt: asset.updatedAt || null
         };
-        if (includeHistory) result.history = asset.history || [];
+        if (includeHistory) {
+            result.history = fullAdmin ? (asset.history || []) : (asset.history || []).map((entry) => {
+                if (entry.action !== 'workstation.duplicate-detected') return entry;
+                return Object.assign({}, entry, { details: 'Potential duplicate workstation record detected.' });
+            });
+        }
         return result;
     }
 
@@ -407,8 +528,9 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         // that resolver assumes the database returned at least one row. Only use
         // node-scoped permissions when the complete scope is available; visibility
         // was already checked above for non-administrators.
-        const permissionContext = (!isPeripheral(asset) && asset.nodeid && asset.meshid)
-            ? { nodeid: asset.nodeid, meshid: asset.meshid }
+        const scopeMeshId = assetScopeMeshId(asset);
+        const permissionContext = scopeMeshId
+            ? { nodeid: asset.nodeid || '', meshid: scopeMeshId }
             : {};
         const check = await permissions(session.user, permissionContext);
         if (!check(permissionName)) throw new Error('Permission denied.');
@@ -435,12 +557,13 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         return { asset: matches[0], error: '' };
     }
 
-    function preparePeripheralRows(rows, assets, excludedAssetId) {
+    function preparePeripheralRows(rows, assets, excludedAssetId, user) {
         if (!Array.isArray(rows)) throw new Error('Peripheral rows are required.');
         if (rows.length === 0) throw new Error('No peripheral rows were provided.');
         if (rows.length > 500) throw new Error('A maximum of 500 peripherals can be imported at once.');
         const peripherals = assets.filter((asset) => isPeripheral(asset) && asset._id !== excludedAssetId);
-        const workstations = assets.filter(isWorkstation);
+        const accessibleMeshIds = isFullAdmin(user) ? null : new Set(userMeshIds(user));
+        const workstations = assets.filter((asset) => isWorkstation(asset) && visibleToUser(asset, user, accessibleMeshIds));
         const serialOwners = new Map();
         const tagOwners = new Map();
         for (const asset of peripherals) {
@@ -455,18 +578,31 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
             const errors = parsed.errors.slice();
             const value = parsed.value;
             if (value.serial) {
-                if (serialOwners.has(value.serial)) errors.push(`Serial number already belongs to ${serialOwners.get(value.serial)}.`);
+                if (serialOwners.has(value.serial)) errors.push('Serial number already exists in inventory.');
                 else serialOwners.set(value.serial, `CSV row ${rowNumber}`);
             }
             const tag = normalizedKey(value.assetTag);
             if (tag) {
-                if (tagOwners.has(tag)) errors.push(`Asset tag already belongs to ${tagOwners.get(tag)}.`);
+                if (tagOwners.has(tag)) errors.push('Asset tag already exists in inventory.');
                 else tagOwners.set(tag, `CSV row ${rowNumber}`);
             }
             const link = resolveWorkstation(value.linkedWorkstation, workstations);
             if (link.error) errors.push(link.error);
+            if (!link.asset && !isFullAdmin(user)) errors.push('A linked workstation in an accessible device group is required.');
             return { rowNumber, value, errors, linkedWorkstation: link.asset };
         });
+    }
+
+    function applyPeripheralScope(asset, linkedWorkstation) {
+        const meshid = assetScopeMeshId(linkedWorkstation);
+        if (meshid) {
+            asset.scope = { meshid, meshName: linkedWorkstation.meshName || meshName(meshid) || '' };
+            asset.links.workstationMeshId = meshid;
+        } else {
+            asset.scope = {};
+            if (asset.links) delete asset.links.workstationMeshId;
+        }
+        return asset;
     }
 
     function prepareManualWorkstation(input, assets, excludedAsset) {
@@ -546,6 +682,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
             for (const row of prepared) {
                 const seed = `peripheral\n${Date.now()}\n${crypto.randomBytes(16).toString('hex')}`;
                 const asset = model.createPeripheral(assetId(domain, seed), domain, row.value, actor, Date.now(), row.linkedWorkstation);
+                applyPeripheralScope(asset, row.linkedWorkstation);
                 await dbSet(asset);
                 created.push(asset);
             }
@@ -567,19 +704,24 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         if (action === 'list') {
             const check = await permissions(session.user, {});
             if (!check('can_view')) throw new Error('Permission denied.');
-            await scanDomain(domain, false);
-            const assets = (await dbAll('inventoryasset', domain)).filter((asset) => visibleToUser(asset, session.user));
+            const accessibleMeshIds = isFullAdmin(session.user) ? null : new Set(userMeshIds(session.user));
+            const assets = (await dbAll('inventoryasset', domain)).filter((asset) => visibleToUser(asset, session.user, accessibleMeshIds));
             assets.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-            const output = assets.map((asset) => publicAsset(asset, false));
-            return { kind: 'list', assets: output, summary: summary(output), permissions: check('_ALL_'), peripheralTypes: model.PERIPHERAL_TYPES };
+            const output = assets.map((asset) => publicAsset(asset, false, session.user));
+            return {
+                kind: 'list', assets: output, summary: summary(output), permissions: check('_ALL_'),
+                peripheralTypes: model.PERIPHERAL_TYPES,
+                capabilities: { canCreateManualWorkstation: isFullAdmin(session.user) }
+            };
         }
 
         if (action === 'get') {
             const asset = await requireAsset(command, session, 'can_view');
-            return { kind: 'asset', asset: publicAsset(asset, true) };
+            return { kind: 'asset', asset: publicAsset(asset, true, session.user) };
         }
 
         if (action === 'workstation-create') {
+            if (!isFullAdmin(session.user)) throw new Error('Only a full administrator can create a domain-wide manual workstation.');
             const check = await permissions(session.user, {});
             if (!check('can_manage')) throw new Error('Permission denied.');
             return withQueue(`domain:${domain}`, async () => {
@@ -589,7 +731,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                 const seed = `manual-workstation\n${Date.now()}\n${crypto.randomBytes(16).toString('hex')}`;
                 const asset = model.createManualWorkstation(assetId(domain, seed), domain, prepared.value, session.user._id, Date.now());
                 await dbSet(asset);
-                return { kind: 'workstation-created', asset: publicAsset(asset, true) };
+                return { kind: 'workstation-created', asset: publicAsset(asset, true, session.user) };
             });
         }
 
@@ -599,25 +741,25 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
             const suppliedRows = action === 'peripheral-create' ? [command.peripheral || {}] : command.rows;
             return withQueue(`domain:${domain}`, async () => {
                 const assets = await dbAll('inventoryasset', domain);
-                const prepared = preparePeripheralRows(suppliedRows, assets);
+                const prepared = preparePeripheralRows(suppliedRows, assets, null, session.user);
                 if (action === 'peripheral-preview') {
                     return { kind: 'peripheral-preview', rows: peripheralPreview(prepared) };
                 }
                 const created = await createPeripheralRecords(domain, prepared, session.user._id);
                 return {
                     kind: action === 'peripheral-create' ? 'peripheral-created' : 'peripheral-imported',
-                    assets: created.map((asset) => publicAsset(asset, true)),
+                    assets: created.map((asset) => publicAsset(asset, true, session.user)),
                     count: created.length
                 };
             });
         }
 
         if (action === 'update') {
-            const asset = await requireAsset(command, session, 'can_manage');
-            const changes = command.changes && typeof command.changes === 'object' ? command.changes : {};
-            const previousStatus = asset.status;
-            if (isPeripheral(asset)) {
-                return withQueue(`domain:${domain}`, async () => {
+            return withQueue(`domain:${domain}`, async () => {
+                const asset = await requireAsset(command, session, 'can_manage');
+                const changes = command.changes && typeof command.changes === 'object' ? command.changes : {};
+                const previousStatus = asset.status;
+                if (isPeripheral(asset)) {
                     const currentUser = asset.assignment && asset.assignment.assignees && asset.assignment.assignees[0];
                     const row = {
                         peripheralType: changes.peripheralType !== undefined ? changes.peripheralType : asset.peripheral && asset.peripheral.type,
@@ -635,7 +777,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                         notes: changes.notes !== undefined ? changes.notes : asset.manual && asset.manual.notes
                     };
                     const assets = await dbAll('inventoryasset', domain);
-                    const prepared = preparePeripheralRows([row], assets, asset._id)[0];
+                    const prepared = preparePeripheralRows([row], assets, asset._id, session.user)[0];
                     if (prepared.errors.length > 0) throw new Error(prepared.errors.join(' '));
                     const value = prepared.value;
                     asset.name = value.name;
@@ -647,6 +789,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                         workstationName: prepared.linkedWorkstation.name || '',
                         workstationNodeId: prepared.linkedWorkstation.nodeid || ''
                     } : {};
+                    applyPeripheralScope(asset, prepared.linkedWorkstation);
                     asset.manual = {
                         assetTag: value.assetTag, location: value.location, notes: value.notes,
                         purchaseDate: value.purchaseDate, warrantyEnd: value.warrantyEnd
@@ -659,11 +802,9 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                     asset.updatedAt = Date.now();
                     model.addHistory(asset, 'peripheral.updated', session.user._id, 'Updated manual peripheral inventory fields', asset.updatedAt);
                     await dbSet(asset);
-                    return { kind: 'asset', asset: publicAsset(asset, true) };
-                });
-            }
-            if (isManualWorkstation(asset)) {
-                return withQueue(`domain:${domain}`, async () => {
+                    return { kind: 'asset', asset: publicAsset(asset, true, session.user) };
+                }
+                if (isManualWorkstation(asset)) {
                     const currentUser = asset.assignment && asset.assignment.assignees && asset.assignment.assignees[0];
                     const hardware = asset.manualHardware || {};
                     const row = {
@@ -688,66 +829,82 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                     await dbSet(asset);
                     const currentAssets = assets.filter((item) => item._id !== asset._id).concat([asset]);
                     await reconcileCrossSourceDuplicates(domain, currentAssets, session.user._id, asset.updatedAt);
-                    return { kind: 'asset', asset: publicAsset(asset, true) };
-                });
-            }
-            if (changes.status !== undefined) {
-                if (!model.LIFECYCLE_STATES.includes(changes.status)) throw new Error('Invalid lifecycle state.');
-                asset.status = changes.status;
-            }
-            if (!asset.manual) asset.manual = {};
-            const limits = { assetTag: 128, location: 256, notes: 4000, purchaseDate: 32, warrantyEnd: 32 };
-            for (const field of Object.keys(limits)) {
-                if (changes[field] !== undefined) asset.manual[field] = model.text(changes[field], limits[field]);
-            }
-            asset.type = 'inventoryasset';
-            asset.updatedAt = Date.now();
-            if (previousStatus !== asset.status) {
-                model.addHistory(asset, 'lifecycle.changed', session.user._id, `${previousStatus} → ${asset.status}`, asset.updatedAt);
-            } else {
-                model.addHistory(asset, 'asset.updated', session.user._id, 'Updated manual inventory fields', asset.updatedAt);
-            }
-            await dbSet(asset);
-            return { kind: 'asset', asset: publicAsset(asset, true) };
+                    return { kind: 'asset', asset: publicAsset(asset, true, session.user) };
+                }
+                if (changes.status !== undefined) {
+                    if (!model.LIFECYCLE_STATES.includes(changes.status)) throw new Error('Invalid lifecycle state.');
+                    asset.status = changes.status;
+                }
+                if (!asset.manual) asset.manual = {};
+                const limits = { assetTag: 128, location: 256, notes: 4000 };
+                for (const field of Object.keys(limits)) {
+                    if (changes[field] !== undefined) asset.manual[field] = model.text(changes[field], limits[field]);
+                }
+                for (const field of ['purchaseDate', 'warrantyEnd']) {
+                    if (changes[field] === undefined) continue;
+                    const rawDate = model.text(changes[field], 32);
+                    const normalizedDate = model.normalizeDate(rawDate);
+                    if (rawDate && !normalizedDate) throw new Error(`${field === 'purchaseDate' ? 'Purchase date' : 'Warranty end'} must be YYYY-MM-DD or DD/MM/YYYY.`);
+                    asset.manual[field] = normalizedDate;
+                }
+                asset.type = 'inventoryasset';
+                asset.updatedAt = Date.now();
+                if (previousStatus !== asset.status) {
+                    model.addHistory(asset, 'lifecycle.changed', session.user._id, `${previousStatus} → ${asset.status}`, asset.updatedAt);
+                } else {
+                    model.addHistory(asset, 'asset.updated', session.user._id, 'Updated manual inventory fields', asset.updatedAt);
+                }
+                await dbSet(asset);
+                return { kind: 'asset', asset: publicAsset(asset, true, session.user) };
+            });
         }
 
         if (action === 'assignment') {
-            const asset = await requireAsset(command, session, 'can_manage');
-            const requestedUser = command.user && typeof command.user === 'object' ? command.user : {};
-            model.assignmentAction(asset, model.text(command.assignmentAction, 32), requestedUser, session.user._id, Date.now());
-            asset.type = 'inventoryasset';
-            await dbSet(asset);
-            return { kind: 'asset', asset: publicAsset(asset, true) };
+            return withQueue(`domain:${domain}`, async () => {
+                const asset = await requireAsset(command, session, 'can_manage');
+                const requestedUser = command.user && typeof command.user === 'object' ? command.user : {};
+                model.assignmentAction(asset, model.text(command.assignmentAction, 32), requestedUser, session.user._id, Date.now());
+                asset.type = 'inventoryasset';
+                await dbSet(asset);
+                return { kind: 'asset', asset: publicAsset(asset, true, session.user) };
+            });
         }
 
         if (action === 'identity') {
-            const asset = await requireAsset(command, session, 'can_manage');
-            const identityAction = model.text(command.identityAction, 32);
-            const requestedConflict = command.conflict && typeof command.conflict === 'object' ? command.conflict : {};
-            if (identityAction === 'accept') {
-                const field = requestedConflict.kind === 'uuid-mismatch' ? 'uuid' : (requestedConflict.kind === 'serial-mismatch' ? 'serial' : '');
-                const observed = field === 'uuid' ? model.normalizeUuid(requestedConflict.observed) : model.normalizeSerial(requestedConflict.observed);
-                if (!field || !observed) throw new Error('Invalid reported identity value.');
-                const assets = await dbAll('inventoryasset', domain);
-                const duplicate = assets.find((item) => item._id !== asset._id && item.identity && item.identity[field] === observed);
-                if (duplicate) throw new Error(`The reported ${field} already belongs to another inventory record (${duplicate.name || duplicate._id}).`);
-            }
-            model.identityConflictAction(asset, identityAction, requestedConflict, session.user._id, Date.now());
-            asset.type = 'inventoryasset';
-            await dbSet(asset);
-            return { kind: 'asset', asset: publicAsset(asset, true) };
+            return withQueue(`domain:${domain}`, async () => {
+                const asset = await requireAsset(command, session, 'can_manage');
+                const identityAction = model.text(command.identityAction, 32);
+                const requestedConflict = command.conflict && typeof command.conflict === 'object' ? command.conflict : {};
+                if (identityAction === 'accept') {
+                    const field = requestedConflict.kind === 'uuid-mismatch' ? 'uuid' : (requestedConflict.kind === 'serial-mismatch' ? 'serial' : '');
+                    const observed = field === 'uuid' ? model.normalizeUuid(requestedConflict.observed) : model.normalizeSerial(requestedConflict.observed);
+                    if (!field || !observed) throw new Error('Invalid reported identity value.');
+                    const assets = await dbAll('inventoryasset', domain);
+                    const duplicate = assets.find((item) => item._id !== asset._id && item.identity && item.identity[field] === observed);
+                    if (duplicate) throw new Error(`The reported ${field} already belongs to another inventory record.`);
+                }
+                model.identityConflictAction(asset, identityAction, requestedConflict, session.user._id, Date.now());
+                asset.type = 'inventoryasset';
+                await dbSet(asset);
+                return { kind: 'asset', asset: publicAsset(asset, true, session.user) };
+            });
         }
 
         if (action === 'delete') {
-            const asset = await requireAsset(command, session, 'can_manage');
-            if (command.confirm !== true) throw new Error('Deletion confirmation is required.');
-            if (!isPeripheral(asset) && !isManualWorkstation(asset) && (!asset.automatic || asset.automatic.nodeExists !== false)) {
-                throw new Error('This inventory record can only be deleted after its MeshCentral node is removed and inventory is synchronized.');
-            }
-            if (typeof db.Remove !== 'function') throw new Error('This MeshCentral database does not support record deletion.');
-            await dbRemove(asset._id);
-            if (isManualWorkstation(asset)) await reconcileCrossSourceDuplicates(domain, null, session.user._id, Date.now());
-            return { kind: 'deleted', assetId: asset._id };
+            return withQueue(`domain:${domain}`, async () => {
+                const asset = await requireAsset(command, session, 'can_manage');
+                if (command.confirm !== true) throw new Error('Deletion confirmation is required.');
+                if (!isPeripheral(asset) && !isManualWorkstation(asset) && (!asset.automatic || asset.automatic.nodeExists !== false)) {
+                    throw new Error('This inventory record can only be deleted after its MeshCentral node is removed and inventory is synchronized.');
+                }
+                if (typeof db.Remove !== 'function') throw new Error('This MeshCentral database does not support record deletion.');
+                await dbRemove(asset._id);
+                if (isManualWorkstation(asset)) {
+                    const assets = (await dbAll('inventoryasset', domain)).filter((item) => item._id !== asset._id);
+                    await reconcileCrossSourceDuplicates(domain, assets, session.user._id, Date.now());
+                }
+                return { kind: 'deleted', assetId: asset._id };
+            });
         }
 
         if (action === 'rescan') {
