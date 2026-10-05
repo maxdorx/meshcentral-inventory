@@ -1,0 +1,1462 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Inventory</title>
+    <link id="inventoryTheme" rel="stylesheet">
+    <style>
+        :root {
+            color-scheme: dark light;
+            --inv-accent: var(--bs-primary, #168fbd);
+            --inv-border: var(--bs-border-color, rgba(128, 128, 128, .35));
+            --inv-muted: var(--bs-secondary-color, #9aa0a6);
+            --inv-surface: var(--bs-tertiary-bg, rgba(128, 128, 128, .12));
+            --inv-fg: #e8e8e8;
+            --inv-on-accent: #fff;
+        }
+        html.inv-classic-light {
+            color-scheme: light;
+            --inv-border: rgba(0, 0, 0, .22);
+            --inv-muted: #5f6368;
+            --inv-surface: rgba(0, 0, 0, .045);
+        }
+        html.inv-classic-light .inv-button { background: #f3f3f3; color: #171717; }
+        html.inv-classic-light .inv-button.primary { background: var(--inv-accent); color: #fff; }
+        html.inv-classic-light .inv-input,
+        html.inv-classic-light .inv-select,
+        html.inv-classic-light .inv-textarea { background: #fff; color: #171717; }
+        html.inv-classic-light .inv-table th { background: #e5e5e5; color: #171717; }
+        * { box-sizing: border-box; }
+        html, body { height: 100%; }
+        body {
+            margin: 0;
+            padding: 16px;
+            background: var(--bs-body-bg, #1f1f1f);
+            color: var(--inv-fg, #e8e8e8);
+            font-family: var(--bs-body-font-family, Arial, sans-serif);
+            font-size: 14px;
+        }
+        button, input, select, textarea { font: inherit; }
+        .inv-shell, .inv-shell h1, .inv-shell h2, .inv-shell h3,
+        .inv-shell table, .inv-shell th, .inv-shell td, .inv-shell dt, .inv-shell dd,
+        .inv-shell label, .inv-shell button, .inv-shell input, .inv-shell select,
+        .inv-shell textarea { color: var(--inv-fg, #e8e8e8) !important; }
+        .inv-shell .inv-muted, .inv-shell .inv-field label, .inv-shell .inv-card-label { color: var(--inv-muted) !important; }
+        .inv-shell .inv-button.primary { color: var(--inv-on-accent, #fff) !important; }
+        .inv-shell .inv-button.danger { color: #fff !important; }
+        .inv-shell .inv-online { color: var(--bs-success, #198754) !important; }
+        .inv-shell .inv-review { color: var(--bs-warning, #ffc107) !important; }
+        .inv-shell { width: 100%; max-width: 1800px; height: 100%; margin: 0 auto; }
+        .inv-dashboard:not(.hidden) { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+        .inv-header { display: flex; gap: 16px; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+        .inv-title { margin: 0; font-size: 26px; font-weight: 650; }
+        .inv-subtitle { color: var(--inv-muted); margin-top: 3px; }
+        .inv-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .inv-button {
+            border: 1px solid var(--inv-border); border-radius: 5px; padding: 7px 12px;
+            background: var(--bs-secondary-bg, #343a40); color: inherit; cursor: pointer;
+        }
+        .inv-button:hover { filter: brightness(1.12); }
+        .inv-button.primary { background: var(--inv-accent); border-color: var(--inv-accent); color: #fff; }
+        .inv-button.danger { background: var(--bs-danger, #b02a37); border-color: var(--bs-danger, #b02a37); color: #fff; }
+        .inv-button.small { padding: 4px 8px; font-size: 12px; }
+        .inv-button:disabled { cursor: not-allowed; opacity: .55; }
+        .inv-hidden { display: none !important; }
+        .inv-tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--inv-border); }
+        .inv-tab { border: 0; border-bottom: 3px solid transparent; padding: 9px 15px; background: transparent; color: var(--inv-fg, #e8e8e8) !important; cursor: pointer; font-weight: 650; }
+        .inv-tab.active { border-bottom-color: var(--inv-accent); color: var(--inv-accent) !important; }
+        .inv-grid { display: grid; grid-template-columns: repeat(6, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px; }
+        .inv-card { border: 1px solid var(--inv-border); border-radius: 7px; background: var(--inv-surface); padding: 13px; color: inherit; text-align: left; cursor: pointer; }
+        .inv-card:hover { border-color: var(--inv-accent); }
+        .inv-card.active { border-color: var(--inv-accent); box-shadow: inset 0 0 0 1px var(--inv-accent); }
+        .inv-card-label { color: var(--inv-muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+        .inv-card-value { margin-top: 5px; font-size: 25px; font-weight: 700; }
+        .inv-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px; border: 1px solid var(--inv-border); border-radius: 7px 7px 0 0; }
+        .inv-toolbar-spacer { flex: 1 1 auto; }
+        .inv-pagination { display: flex; align-items: center; gap: 6px; }
+        .inv-input, .inv-select, .inv-textarea {
+            border: 1px solid var(--inv-border); border-radius: 5px; padding: 7px 9px;
+            background: var(--bs-body-bg, #222); color: inherit;
+        }
+        .inv-input { min-width: 230px; }
+        .inv-textarea { min-height: 95px; resize: vertical; width: 100%; }
+        .inv-table-wrap { flex: 1 1 auto; min-height: 180px; border: 1px solid var(--inv-border); border-top: 0; overflow: auto; }
+        .inv-table { width: 100%; border-collapse: collapse; min-width: 1050px; }
+        .inv-table th { position: sticky; top: 0; z-index: 1; background: var(--bs-secondary-bg, #333); text-align: left; padding: 7px 9px; white-space: nowrap; }
+        .inv-table td { border-top: 1px solid var(--inv-border); padding: 6px 9px; vertical-align: middle; }
+        .inv-table tbody tr { cursor: pointer; }
+        .inv-table tbody tr:hover { background: rgba(64, 160, 210, .12); }
+        .inv-device-cell { min-width: 140px; }
+        .inv-device, .inv-device-cell .inv-muted { font-weight: 650; white-space: nowrap; }
+        .inv-device-cell .inv-muted { font-weight: 400; }
+        .inv-muted { color: var(--inv-muted); }
+        .inv-mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+        .inv-badge { display: inline-block; border-radius: 999px; padding: 3px 8px; font-size: 12px; border: 1px solid var(--inv-border); white-space: nowrap; }
+        .inv-badge.assigned { background: rgba(25, 135, 84, .2); color: var(--bs-success-text-emphasis, #75b798); }
+        .inv-badge.available, .inv-badge.discovered { background: rgba(13, 110, 253, .18); color: var(--bs-info-text-emphasis, #6edff6); }
+        .inv-badge.in-repair { background: rgba(255, 193, 7, .18); color: var(--bs-warning-text-emphasis, #ffda6a); }
+        .inv-badge.retired, .inv-badge.lost-stolen { background: rgba(220, 53, 69, .17); color: var(--bs-danger-text-emphasis, #ea868f); }
+        .inv-review { color: var(--bs-warning, #ffc107); font-weight: 650; }
+        .inv-empty { padding: 42px 16px; text-align: center; color: var(--inv-muted); }
+        .inv-loading { opacity: .65; pointer-events: none; }
+        .inv-detail { display: none; }
+        .inv-detail.open { display: block; }
+        .inv-dashboard.hidden { display: none; }
+        .inv-detail-grid { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr); gap: 12px; }
+        .inv-section { border: 1px solid var(--inv-border); border-radius: 7px; background: var(--inv-surface); padding: 14px; margin-bottom: 12px; }
+        .inv-section h2 { font-size: 17px; margin: 0 0 12px; }
+        .inv-fields { display: grid; grid-template-columns: 150px 1fr; gap: 8px 12px; align-items: start; }
+        .inv-fields dt { color: var(--inv-muted); }
+        .inv-fields dd { margin: 0; word-break: break-word; }
+        .inv-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .inv-field { display: flex; flex-direction: column; gap: 4px; }
+        .inv-field.full { grid-column: 1 / -1; }
+        .inv-field label { color: var(--inv-muted); font-size: 12px; }
+        .inv-user { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-top: 1px solid var(--inv-border); }
+        .inv-user:first-of-type { border-top: 0; }
+        .inv-user-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+        .inv-history { max-height: 310px; overflow: auto; }
+        .inv-history-item { border-left: 2px solid var(--inv-accent); padding: 2px 0 10px 10px; margin-left: 4px; }
+        .inv-history-action { font-weight: 650; }
+        .inv-toast { position: fixed; right: 18px; bottom: 18px; max-width: 440px; padding: 11px 14px; border-radius: 6px; background: #222; color: #fff; box-shadow: 0 4px 22px rgba(0,0,0,.35); display: none; z-index: 20; }
+        .inv-toast.error { background: #842029; }
+        .inv-modal-backdrop { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(0,0,0,.68); }
+        .inv-modal { width: min(900px, 100%); max-height: calc(100vh - 40px); overflow: auto; border: 1px solid var(--inv-border); border-radius: 8px; background: var(--bs-body-bg, #202124); color: inherit; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+        .inv-modal-header, .inv-modal-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--inv-border); }
+        .inv-modal-footer { justify-content: flex-end; border-top: 1px solid var(--inv-border); border-bottom: 0; }
+        .inv-modal-body { padding: 16px; }
+        .inv-modal h2 { margin: 0; font-size: 19px; }
+        .inv-close { border: 0; background: transparent; color: inherit; font-size: 24px; cursor: pointer; }
+        .inv-import-summary { margin-bottom: 10px; font-weight: 650; }
+        .inv-import-errors { color: var(--bs-danger-text-emphasis, #ea868f); }
+        .inv-preview-wrap { max-height: 360px; overflow: auto; border: 1px solid var(--inv-border); }
+        .inv-preview { width: 100%; border-collapse: collapse; min-width: 760px; }
+        .inv-preview th { position: sticky; top: 0; background: var(--bs-secondary-bg, #333); text-align: left; padding: 7px; }
+        .inv-preview td { border-top: 1px solid var(--inv-border); padding: 7px; vertical-align: top; }
+        .inv-online { color: var(--bs-success, #198754); }
+        .inv-offline { color: var(--inv-muted); }
+        @media (max-width: 1100px) {
+            .inv-grid { grid-template-columns: repeat(3, 1fr); }
+            .inv-detail-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 650px) {
+            body { padding: 10px; }
+            .inv-header { align-items: flex-start; flex-direction: column; }
+            .inv-grid { grid-template-columns: repeat(2, 1fr); }
+            .inv-form-grid { grid-template-columns: 1fr; }
+            .inv-field.full { grid-column: auto; }
+            .inv-fields { grid-template-columns: 115px 1fr; }
+        }
+    </style>
+</head>
+<body>
+<div class="inv-shell" id="inventoryRoot">
+    <section class="inv-dashboard" id="dashboard">
+        <nav class="inv-tabs" id="inventoryTabs" aria-label="Inventory type">
+            <button class="inv-tab active" id="workstationsTab" type="button">Workstations</button>
+            <button class="inv-tab" id="peripheralsTab" type="button">Peripherals</button>
+        </nav>
+        <header class="inv-header">
+            <div>
+                <h1 class="inv-title" id="sectionTitle">Workstations</h1>
+                <div class="inv-subtitle" id="sectionSubtitle">Automatic inventory from MeshCentral agent details</div>
+            </div>
+            <div class="inv-actions">
+                <button class="inv-button" id="exportButton" type="button">Export CSV</button>
+                <button class="inv-button primary" id="rescanButton" type="button">Synchronize</button>
+                <button class="inv-button primary" id="addWorkstationButton" type="button">Add workstation</button>
+                <button class="inv-button" id="templateButton" type="button">Download CSV template</button>
+                <button class="inv-button" id="importButton" type="button">Import CSV</button>
+                <button class="inv-button primary" id="addPeripheralButton" type="button">Add peripheral</button>
+                <input id="importFileInput" class="inv-hidden" type="file" accept=".csv,text/csv">
+            </div>
+        </header>
+
+        <div class="inv-grid" id="summaryCards"></div>
+
+        <div class="inv-toolbar">
+            <input class="inv-input" id="searchInput" type="search" placeholder="Search device, serial, user, location…">
+            <select class="inv-select" id="statusFilter"><option value="">All lifecycle states</option></select>
+            <select class="inv-select inv-hidden" id="typeFilter"><option value="">All peripheral types</option></select>
+            <select class="inv-select" id="reviewFilter">
+                <option value="">All review states</option>
+                <option value="review">Needs review</option>
+                <option value="clear">No review</option>
+            </select>
+            <select class="inv-select" id="presenceFilter">
+                <option value="">All agent states</option>
+                <option value="online">Online</option>
+                <option value="offline">Offline</option>
+                <option value="stale7">Not seen for 7+ days</option>
+                <option value="stale30">Not seen for 30+ days</option>
+                <option value="stale90">Not seen for 90+ days</option>
+            </select>
+            <span class="inv-toolbar-spacer"></span>
+            <select class="inv-select" id="pageSize" aria-label="Rows per page">
+                <option value="10">10 per page</option>
+                <option value="25" selected>25 per page</option>
+                <option value="50">50 per page</option>
+                <option value="100">100 per page</option>
+            </select>
+            <div class="inv-pagination">
+                <button class="inv-button small" id="previousPage" type="button">Previous</button>
+                <span class="inv-muted" id="resultCount"></span>
+                <button class="inv-button small" id="nextPage" type="button">Next</button>
+            </div>
+        </div>
+
+        <div class="inv-table-wrap">
+            <table class="inv-table">
+                <thead id="assetHead"><tr>
+                    <th>Device</th><th>Status</th><th>Assignee</th><th>Serial</th><th>UUID</th>
+                    <th>Model</th><th>Location</th><th>Agent</th><th>Review</th>
+                </tr></thead>
+                <tbody id="assetRows"></tbody>
+            </table>
+            <div class="inv-empty" id="emptyState">Loading inventory…</div>
+        </div>
+    </section>
+
+    <section class="inv-detail" id="detail">
+        <header class="inv-header">
+            <div>
+                <button class="inv-button small" id="backButton" type="button">← Inventory</button>
+                <h1 class="inv-title" id="detailTitle" style="margin-top:10px">Asset</h1>
+                <div class="inv-subtitle" id="detailSubtitle"></div>
+            </div>
+            <div class="inv-actions">
+                <button class="inv-button" id="openDeviceButton" type="button">Open device</button>
+                <button class="inv-button danger" id="deleteButton" type="button">Delete inventory record</button>
+                <button class="inv-button primary" id="saveButton" type="button">Save changes</button>
+            </div>
+        </header>
+
+        <div class="inv-detail-grid">
+            <div>
+                <section class="inv-section">
+                    <h2>Lifecycle</h2>
+                    <div class="inv-form-grid">
+                        <div class="inv-field"><label for="statusInput">Status</label><select class="inv-select" id="statusInput"></select></div>
+                        <div class="inv-field"><label for="assetTagInput">Asset tag</label><input class="inv-input" id="assetTagInput" maxlength="128"></div>
+                        <div class="inv-field"><label for="locationInput">Location</label><input class="inv-input" id="locationInput" maxlength="256"></div>
+                        <div class="inv-field"><label for="purchaseDateInput">Purchase date</label><input class="inv-input" id="purchaseDateInput" type="date"></div>
+                        <div class="inv-field"><label for="warrantyEndInput">Warranty end</label><input class="inv-input" id="warrantyEndInput" type="date"></div>
+                        <div class="inv-field full"><label for="notesInput">Notes</label><textarea class="inv-textarea" id="notesInput" maxlength="4000"></textarea></div>
+                    </div>
+                </section>
+
+                <section class="inv-section">
+                    <h2 id="hardwareTitle">Hardware identity</h2>
+                    <dl class="inv-fields" id="hardwareFields"></dl>
+                </section>
+                <section class="inv-section inv-hidden" id="peripheralEditSection">
+                    <h2>Peripheral details</h2>
+                    <div class="inv-form-grid">
+                        <div class="inv-field"><label for="peripheralTypeInput">Type</label><select class="inv-select" id="peripheralTypeInput"></select></div>
+                        <div class="inv-field"><label for="peripheralNameInput">Name</label><input class="inv-input" id="peripheralNameInput" maxlength="256"></div>
+                        <div class="inv-field"><label for="peripheralSerialInput">Serial number</label><input class="inv-input" id="peripheralSerialInput" maxlength="128"></div>
+                        <div class="inv-field"><label for="peripheralManufacturerInput">Manufacturer</label><input class="inv-input" id="peripheralManufacturerInput" maxlength="256"></div>
+                        <div class="inv-field"><label for="peripheralModelInput">Model</label><input class="inv-input" id="peripheralModelInput" maxlength="256"></div>
+                        <div class="inv-field"><label for="peripheralUserInput">Assigned user</label><input class="inv-input" id="peripheralUserInput" maxlength="256" placeholder="Name or email"></div>
+                        <div class="inv-field full"><label for="peripheralWorkstationInput">Linked workstation</label><select class="inv-select" id="peripheralWorkstationInput"><option value="">No linked workstation</option></select></div>
+                    </div>
+                </section>
+                <section class="inv-section inv-hidden" id="workstationEditSection">
+                    <h2>Manual workstation details</h2>
+                    <div class="inv-form-grid">
+                        <div class="inv-field"><label for="workstationNameInput">Name</label><input class="inv-input" id="workstationNameInput" maxlength="256"></div>
+                        <div class="inv-field"><label for="workstationSerialInput">Serial number</label><input class="inv-input" id="workstationSerialInput" maxlength="128"></div>
+                        <div class="inv-field"><label for="workstationUuidInput">UUID</label><input class="inv-input" id="workstationUuidInput" maxlength="128"></div>
+                        <div class="inv-field"><label for="workstationManufacturerInput">Manufacturer</label><input class="inv-input" id="workstationManufacturerInput" maxlength="256"></div>
+                        <div class="inv-field"><label for="workstationModelInput">Model</label><input class="inv-input" id="workstationModelInput" maxlength="256"></div>
+                        <div class="inv-field"><label for="workstationOsInput">Operating system</label><input class="inv-input" id="workstationOsInput" maxlength="512"></div>
+                        <div class="inv-field full"><label for="workstationUserInput">Assigned user</label><input class="inv-input" id="workstationUserInput" maxlength="256" placeholder="Name or email"></div>
+                    </div>
+                </section>
+            </div>
+
+            <div>
+                <section class="inv-section">
+                    <h2>Assignment</h2>
+                    <div id="assignmentSummary"></div>
+                    <div id="assignmentReview"></div>
+                </section>
+
+                <section class="inv-section">
+                    <h2>Audit history</h2>
+                    <div class="inv-history" id="historyList"></div>
+                </section>
+            </div>
+        </div>
+    </section>
+</div>
+<div class="inv-toast" id="toast"></div>
+
+<div class="inv-modal-backdrop inv-hidden" id="workstationModal">
+    <div class="inv-modal" role="dialog" aria-modal="true" aria-labelledby="workstationModalTitle">
+        <div class="inv-modal-header"><h2 id="workstationModalTitle">Add workstation</h2><button class="inv-close" id="closeWorkstationModal" type="button" aria-label="Close">×</button></div>
+        <div class="inv-modal-body">
+            <div class="inv-form-grid">
+                <div class="inv-field"><label for="addWorkstationName">Name *</label><input class="inv-input" id="addWorkstationName" maxlength="256"></div>
+                <div class="inv-field"><label for="addWorkstationAssetTag">Asset tag</label><input class="inv-input" id="addWorkstationAssetTag" maxlength="128"></div>
+                <div class="inv-field"><label for="addWorkstationSerial">Serial number</label><input class="inv-input" id="addWorkstationSerial" maxlength="128"></div>
+                <div class="inv-field"><label for="addWorkstationUuid">UUID</label><input class="inv-input" id="addWorkstationUuid" maxlength="128"></div>
+                <div class="inv-field"><label for="addWorkstationManufacturer">Manufacturer</label><input class="inv-input" id="addWorkstationManufacturer" maxlength="256"></div>
+                <div class="inv-field"><label for="addWorkstationModel">Model</label><input class="inv-input" id="addWorkstationModel" maxlength="256"></div>
+                <div class="inv-field"><label for="addWorkstationOs">Operating system</label><input class="inv-input" id="addWorkstationOs" maxlength="512"></div>
+                <div class="inv-field"><label for="addWorkstationUser">Assigned user</label><input class="inv-input" id="addWorkstationUser" maxlength="256" placeholder="Name or email"></div>
+                <div class="inv-field"><label for="addWorkstationStatus">Status</label><select class="inv-select" id="addWorkstationStatus"></select></div>
+                <div class="inv-field"><label for="addWorkstationLocation">Location</label><input class="inv-input" id="addWorkstationLocation" maxlength="256"></div>
+                <div class="inv-field"><label for="addWorkstationPurchaseDate">Purchase date</label><input class="inv-input" id="addWorkstationPurchaseDate" type="date"></div>
+                <div class="inv-field"><label for="addWorkstationWarrantyEnd">Warranty end</label><input class="inv-input" id="addWorkstationWarrantyEnd" type="date"></div>
+                <div class="inv-field full"><label for="addWorkstationNotes">Notes</label><textarea class="inv-textarea" id="addWorkstationNotes" maxlength="4000"></textarea></div>
+            </div>
+        </div>
+        <div class="inv-modal-footer">
+            <button class="inv-button" id="cancelWorkstation" type="button">Cancel</button>
+            <button class="inv-button primary" id="saveWorkstation" type="button">Save</button>
+        </div>
+    </div>
+</div>
+
+<div class="inv-modal-backdrop inv-hidden" id="peripheralModal">
+    <div class="inv-modal" role="dialog" aria-modal="true" aria-labelledby="peripheralModalTitle">
+        <div class="inv-modal-header"><h2 id="peripheralModalTitle">Add peripheral</h2><button class="inv-close" id="closePeripheralModal" type="button" aria-label="Close">×</button></div>
+        <div class="inv-modal-body">
+            <div class="inv-form-grid">
+                <div class="inv-field"><label for="addType">Type *</label><select class="inv-select" id="addType"></select></div>
+                <div class="inv-field"><label for="addName">Name</label><input class="inv-input" id="addName" maxlength="256" placeholder="Defaults to manufacturer/model or type"></div>
+                <div class="inv-field"><label for="addAssetTag">Asset tag</label><input class="inv-input" id="addAssetTag" maxlength="128"></div>
+                <div class="inv-field"><label for="addSerial">Serial number</label><input class="inv-input" id="addSerial" maxlength="128"></div>
+                <div class="inv-field"><label for="addManufacturer">Manufacturer</label><input class="inv-input" id="addManufacturer" maxlength="256"></div>
+                <div class="inv-field"><label for="addModel">Model</label><input class="inv-input" id="addModel" maxlength="256"></div>
+                <div class="inv-field"><label for="addAssignedUser">Assigned user</label><input class="inv-input" id="addAssignedUser" maxlength="256" placeholder="Name or email"></div>
+                <div class="inv-field"><label for="addWorkstation">Linked workstation</label><select class="inv-select" id="addWorkstation"><option value="">No linked workstation</option></select></div>
+                <div class="inv-field"><label for="addStatus">Status</label><select class="inv-select" id="addStatus"></select></div>
+                <div class="inv-field"><label for="addLocation">Location</label><input class="inv-input" id="addLocation" maxlength="256"></div>
+                <div class="inv-field"><label for="addPurchaseDate">Purchase date</label><input class="inv-input" id="addPurchaseDate" type="date"></div>
+                <div class="inv-field"><label for="addWarrantyEnd">Warranty end</label><input class="inv-input" id="addWarrantyEnd" type="date"></div>
+                <div class="inv-field full"><label for="addNotes">Notes</label><textarea class="inv-textarea" id="addNotes" maxlength="4000"></textarea></div>
+            </div>
+        </div>
+        <div class="inv-modal-footer">
+            <button class="inv-button" id="cancelPeripheral" type="button">Cancel</button>
+            <button class="inv-button" id="saveAndAnotherPeripheral" type="button">Save &amp; add another</button>
+            <button class="inv-button primary" id="savePeripheral" type="button">Save</button>
+        </div>
+    </div>
+</div>
+
+<div class="inv-modal-backdrop inv-hidden" id="importModal">
+    <div class="inv-modal" role="dialog" aria-modal="true" aria-labelledby="importModalTitle">
+        <div class="inv-modal-header"><h2 id="importModalTitle">Import peripherals</h2><button class="inv-close" id="closeImportModal" type="button" aria-label="Close">×</button></div>
+        <div class="inv-modal-body">
+            <div class="inv-import-summary" id="importSummary"></div>
+            <div class="inv-preview-wrap"><table class="inv-preview"><thead><tr><th>Row</th><th>Type</th><th>Name</th><th>Asset tag</th><th>Serial</th><th>Assigned user</th><th>Linked workstation</th><th>Validation</th></tr></thead><tbody id="importPreviewRows"></tbody></table></div>
+        </div>
+        <div class="inv-modal-footer">
+            <button class="inv-button" id="cancelImport" type="button">Cancel</button>
+            <button class="inv-button primary" id="confirmImport" type="button" disabled>Import all</button>
+        </div>
+    </div>
+</div>
+
+<script>window.INVENTORY_BOOT = {{{boot}}};</script>
+<script>
+(function () {
+    'use strict';
+
+    var boot = window.INVENTORY_BOOT || {};
+    var state = {
+        assets: [], selected: null, permissions: boot.permissions || [], loading: false,
+        cardFilter: '', pendingListRequestId: '', pendingRequests: {}, requestedAssetId: '', activeTab: 'workstations',
+        peripheralTypes: boot.peripheralTypes || ['Mouse', 'Keyboard', 'Headset', 'Monitor', 'Other'],
+        importRows: [], importPreview: [], keepAddAnother: false, page: 1, pageSize: 25
+    };
+    var requestCounter = 0;
+    var frameRequestPrefix = (boot.mode === 'device' ? 'device' : 'dashboard') + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+
+    function byId(id) { return document.getElementById(id); }
+    function can(permission) { return state.permissions.indexOf(permission) >= 0; }
+    function value(value, fallback) { return value === null || value === undefined || value === '' ? (fallback || '') : String(value); }
+    function formatDate(input) {
+        if (!input) return '—';
+        var date = new Date(input);
+        return isNaN(date.getTime()) ? '—' : date.toLocaleString();
+    }
+    function formatBytes(input) {
+        var bytes = Number(input) || 0;
+        if (!bytes) return '—';
+        var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        var index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+        return (bytes / Math.pow(1024, index)).toFixed(index > 2 ? 1 : 0) + ' ' + units[index];
+    }
+    function statusClass(status) { return value(status).toLowerCase().replace(/[^a-z0-9]+/g, '-'); }
+    function node(tag, className, content) {
+        var element = document.createElement(tag);
+        if (className) element.className = className;
+        if (content !== undefined) element.textContent = value(content);
+        return element;
+    }
+    function clear(element) { while (element.firstChild) element.removeChild(element.firstChild); }
+    function isPeripheral(asset) { return asset && asset.assetKind === 'peripheral'; }
+    function isManualWorkstation(asset) { return asset && !isPeripheral(asset) && asset.source === 'manual'; }
+    function assetsForTab() {
+        return state.assets.filter(function (asset) { return state.activeTab === 'peripherals' ? isPeripheral(asset) : !isPeripheral(asset); });
+    }
+    function workstationAssets() {
+        return state.assets.filter(function (asset) { return !isPeripheral(asset); }).sort(function (a, b) {
+            return value(a.name).localeCompare(value(b.name));
+        });
+    }
+    function populateTypes(select, selected) {
+        clear(select);
+        state.peripheralTypes.forEach(function (type) { select.appendChild(new Option(type, type)); });
+        if (selected) select.value = selected;
+    }
+    function populateWorkstations(select, selected) {
+        clear(select);
+        select.appendChild(new Option('No linked workstation', ''));
+        workstationAssets().forEach(function (asset) {
+            var serial = value(asset.identity && asset.identity.serial);
+            select.appendChild(new Option(value(asset.name, 'Unnamed workstation') + (serial ? ' · ' + serial : ''), asset.id));
+        });
+        select.value = selected || '';
+    }
+
+    function showToast(message, error) {
+        var toast = byId('toast');
+        toast.textContent = message;
+        toast.className = 'inv-toast' + (error ? ' error' : '');
+        toast.style.display = 'block';
+        setTimeout(function () { toast.style.display = 'none'; }, 4500);
+    }
+
+    function setLoading(loading) {
+        state.loading = loading;
+        byId('inventoryRoot').classList.toggle('inv-loading', loading);
+    }
+
+    function send(action, payload, connectionAttempt, responseAttempt) {
+        var attempt = Number(connectionAttempt) || 0;
+        var replyAttempt = Number(responseAttempt) || 0;
+        if (!window.parent || !window.parent.meshserver || window.parent.meshserver.State !== 2 || typeof window.parent.meshserver.send !== 'function') {
+            if (attempt < 60) {
+                setTimeout(function () { send(action, payload, attempt + 1, replyAttempt); }, 250);
+            } else {
+                setLoading(false);
+                showToast('MeshCentral connection is unavailable.', true);
+            }
+            return;
+        }
+        requestCounter++;
+        var message = Object.assign({}, payload || {});
+        message.action = 'plugin';
+        message.plugin = 'inventory';
+        message.pluginaction = action;
+        message.requestId = 'inventory-' + frameRequestPrefix + '-' + requestCounter;
+        if (action === 'list') {
+            if (state.pendingListRequestId) delete state.pendingRequests[state.pendingListRequestId];
+            state.pendingListRequestId = message.requestId;
+        }
+        state.pendingRequests[message.requestId] = { action: action };
+        setLoading(true);
+        window.parent.meshserver.send(message);
+        if (action === 'list') {
+            var sentRequestId = message.requestId;
+            setTimeout(function () {
+                if (state.pendingListRequestId !== sentRequestId) return;
+                if (replyAttempt < 5) {
+                    delete state.pendingRequests[sentRequestId];
+                    send('list', payload || {}, 0, replyAttempt + 1);
+                } else {
+                    delete state.pendingRequests[sentRequestId];
+                    state.pendingListRequestId = '';
+                    setLoading(false);
+                    showToast('Inventory did not receive a response from MeshCentral. Refresh or try again.', true);
+                }
+            }, 2000);
+        }
+    }
+
+    function setAssetUrl(assetId) {
+        if (boot.mode === 'device') return;
+        state.requestedAssetId = assetId || '';
+        try {
+            if (typeof window.parent.urlargs === 'object' && window.parent.urlargs != null) {
+                window.parent.urlargs.inventorytab = state.activeTab;
+                if (assetId) window.parent.urlargs.inventoryasset = assetId;
+                else delete window.parent.urlargs.inventoryasset;
+            }
+            var url = new URL(window.parent.location.href);
+            if (assetId) url.searchParams.set('inventoryasset', assetId);
+            else url.searchParams.delete('inventoryasset');
+            url.searchParams.set('inventorytab', state.activeTab);
+            window.parent.history.replaceState({}, window.parent.document.title, url.pathname + url.search + url.hash);
+        } catch (error) { /* Parent URL persistence is best effort. */ }
+    }
+
+    function readRequestedAsset() {
+        if (boot.mode === 'device') return '';
+        try { return new URL(window.parent.location.href).searchParams.get('inventoryasset') || ''; }
+        catch (error) { return ''; }
+    }
+
+    function readRequestedTab() {
+        if (boot.mode === 'device') return 'workstations';
+        try { return new URL(window.parent.location.href).searchParams.get('inventorytab') === 'peripherals' ? 'peripherals' : 'workstations'; }
+        catch (error) { return 'workstations'; }
+    }
+
+    function setTabUrl() {
+        if (boot.mode === 'device') return;
+        try {
+            if (typeof window.parent.urlargs === 'object' && window.parent.urlargs != null) {
+                window.parent.urlargs.inventorytab = state.activeTab;
+                delete window.parent.urlargs.inventoryasset;
+            }
+            var url = new URL(window.parent.location.href);
+            url.searchParams.set('inventorytab', state.activeTab);
+            url.searchParams.delete('inventoryasset');
+            window.parent.history.replaceState({}, window.parent.document.title, url.pathname + url.search + url.hash);
+        } catch (error) { /* Parent URL persistence is best effort. */ }
+    }
+
+    function setActiveTab(tab, updateUrl) {
+        state.activeTab = tab === 'peripherals' ? 'peripherals' : 'workstations';
+        state.cardFilter = '';
+        state.page = 1;
+        byId('workstationsTab').classList.toggle('active', state.activeTab === 'workstations');
+        byId('peripheralsTab').classList.toggle('active', state.activeTab === 'peripherals');
+        var peripherals = state.activeTab === 'peripherals';
+        byId('sectionTitle').textContent = peripherals ? 'Peripherals' : 'Workstations';
+        byId('sectionSubtitle').textContent = peripherals ? 'Manual inventory for monitors, mice, keyboards, headsets, and other peripherals' : 'Automatic agent inventory and separate manual workstation records';
+        byId('rescanButton').classList.toggle('inv-hidden', peripherals || !can('can_sync'));
+        byId('addWorkstationButton').classList.toggle('inv-hidden', peripherals || !can('can_manage'));
+        byId('templateButton').classList.toggle('inv-hidden', !peripherals || !can('can_manage'));
+        byId('importButton').classList.toggle('inv-hidden', !peripherals || !can('can_manage'));
+        byId('addPeripheralButton').classList.toggle('inv-hidden', !peripherals || !can('can_manage'));
+        byId('reviewFilter').classList.toggle('inv-hidden', peripherals);
+        byId('presenceFilter').classList.toggle('inv-hidden', peripherals);
+        byId('typeFilter').classList.toggle('inv-hidden', !peripherals);
+        byId('searchInput').placeholder = peripherals ? 'Search peripheral, serial, user, workstation…' : 'Search device, serial, user, location…';
+        byId('reviewFilter').value = '';
+        byId('presenceFilter').value = '';
+        byId('typeFilter').value = '';
+        if (updateUrl) setTabUrl();
+        renderSummary();
+        renderRows();
+    }
+
+    function syncTheme() {
+        try {
+            var parentDocument = window.parent.document;
+            var parentTheme = parentDocument.getElementById('theme-stylesheet');
+            var localTheme = byId('inventoryTheme');
+            if (parentTheme && parentTheme.href && localTheme.href !== parentTheme.href) localTheme.href = parentTheme.href;
+            var mode = parentDocument.documentElement.getAttribute('data-bs-theme');
+            if (mode) document.documentElement.setAttribute('data-bs-theme', mode);
+            var rootStyles = window.parent.getComputedStyle(parentDocument.documentElement);
+            var bodyStyles = window.parent.getComputedStyle(parentDocument.body);
+            var root = document.documentElement;
+            var themeVariables = {
+                '--inv-border': '--bs-border-color',
+                '--inv-muted': '--bs-secondary-color',
+                '--inv-surface': '--bs-tertiary-bg'
+            };
+            Object.keys(themeVariables).forEach(function (target) {
+                var themeValue = rootStyles.getPropertyValue(themeVariables[target]).trim();
+                if (themeValue) root.style.setProperty(target, themeValue);
+            });
+            var background = rootStyles.getPropertyValue('--bs-body-bg').trim() || bodyStyles.backgroundColor;
+            var foreground = rootStyles.getPropertyValue('--bs-body-color').trim() || bodyStyles.color;
+            document.body.style.backgroundColor = background;
+            document.body.style.fontFamily = bodyStyles.fontFamily;
+            var rgb = (background.match(/[\d.]+/g) || []).map(Number);
+            var luminance = rgb.length >= 3 ? ((rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000) : 0;
+            if (!foreground || foreground === 'transparent') foreground = luminance > 145 ? '#171717' : '#e8e8e8';
+            function colorRgb(color) {
+                color = String(color || '').trim();
+                var hex = color.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+                if (hex) {
+                    var value = hex[1];
+                    if (value.length === 3) value = value.split('').map(function (part) { return part + part; }).join('');
+                    return [parseInt(value.slice(0, 2), 16), parseInt(value.slice(2, 4), 16), parseInt(value.slice(4, 6), 16)];
+                }
+                var parts = color.match(/[\d.]+/g);
+                return parts && parts.length >= 3 ? parts.slice(0, 3).map(Number) : null;
+            }
+            function colorLuminance(color) {
+                var parts = colorRgb(color);
+                if (!parts) return null;
+                return parts.map(function (part) {
+                    var channel = part / 255;
+                    return channel <= 0.03928 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
+                }).reduce(function (total, channel, index) {
+                    return total + channel * [0.2126, 0.7152, 0.0722][index];
+                }, 0);
+            }
+            function contrast(first, second) {
+                var a = colorLuminance(first);
+                var b = colorLuminance(second);
+                if (a == null || b == null) return 0;
+                return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+            }
+            var accentCandidates = [
+                rootStyles.getPropertyValue('--bs-primary').trim(),
+                rootStyles.getPropertyValue('--bs-info').trim(),
+                rootStyles.getPropertyValue('--bs-link-color').trim(),
+                foreground
+            ].filter(Boolean);
+            var accent = accentCandidates[0] || '#168fbd';
+            for (var candidateIndex = 0; candidateIndex < accentCandidates.length; candidateIndex++) {
+                if (contrast(accentCandidates[candidateIndex], background) >= 3) {
+                    accent = accentCandidates[candidateIndex];
+                    break;
+                }
+            }
+            root.style.setProperty('--inv-accent', accent);
+            root.style.setProperty('--inv-on-accent', contrast('#fff', accent) >= contrast('#171717', accent) ? '#fff' : '#171717');
+            root.style.setProperty('--inv-fg', foreground);
+            document.body.style.color = foreground;
+            root.classList.toggle('inv-classic-light', !parentTheme && luminance > 145);
+        } catch (error) { /* Same-origin theme sync is best effort. */ }
+    }
+
+    function assignmentText(asset) {
+        var assignment = asset.assignment || {};
+        var names = (assignment.assignees || []).map(function (item) { return item.display || item.id; });
+        if (names.length === 0) return 'Unassigned';
+        return (assignment.mode === 'shared' ? 'Shared: ' : '') + names.join(', ');
+    }
+
+    function needsReview(asset) {
+        return ((asset.assignment && asset.assignment.pending) || []).length > 0 || (asset.identityConflicts || []).length > 0 || (asset.duplicateConflicts || []).length > 0;
+    }
+
+    function summarizeAssets(assets) {
+        var result = { total: assets.length, assigned: 0, available: 0, review: 0, repair: 0, retired: 0 };
+        assets.forEach(function (asset) {
+            if (asset.status === 'Assigned') result.assigned++;
+            if (asset.status === 'Available' || asset.status === 'Discovered') result.available++;
+            if (asset.status === 'In Repair') result.repair++;
+            if (asset.status === 'Retired') result.retired++;
+            if (needsReview(asset)) result.review++;
+        });
+        return result;
+    }
+
+    function selectCardFilter(key) {
+        state.cardFilter = key === 'all' ? '' : (state.cardFilter === key ? '' : key);
+        state.page = 1;
+        byId('statusFilter').value = '';
+        byId('reviewFilter').value = '';
+        byId('presenceFilter').value = '';
+        renderSummary();
+        renderRows();
+    }
+
+    function renderSummary() {
+        var summary = summarizeAssets(assetsForTab());
+        var cards = [
+            [state.activeTab === 'peripherals' ? 'Total peripherals' : 'Total workstations', summary.total || 0, 'all'],
+            ['Assigned', summary.assigned || 0, 'assigned'],
+            ['Available', summary.available || 0, 'available'],
+            ['Needs review', summary.review || 0, 'review'],
+            ['In repair', summary.repair || 0, 'repair'],
+            ['Retired', summary.retired || 0, 'retired']
+        ];
+        var container = byId('summaryCards');
+        clear(container);
+        cards.forEach(function (item) {
+            var active = (item[2] === 'all' && !state.cardFilter) || state.cardFilter === item[2];
+            var card = node('button', 'inv-card' + (active ? ' active' : ''));
+            card.type = 'button';
+            card.setAttribute('aria-pressed', active ? 'true' : 'false');
+            card.addEventListener('click', function () { selectCardFilter(item[2]); });
+            card.appendChild(node('div', 'inv-card-label', item[0]));
+            card.appendChild(node('div', 'inv-card-value', item[1]));
+            container.appendChild(card);
+        });
+    }
+
+    function filteredAssets() {
+        var search = byId('searchInput').value.trim().toLowerCase();
+        var status = byId('statusFilter').value;
+        var peripheralType = byId('typeFilter').value;
+        var review = byId('reviewFilter').value;
+        var presence = byId('presenceFilter').value;
+        var now = Date.now();
+        return assetsForTab().filter(function (asset) {
+            if (state.cardFilter === 'assigned' && asset.status !== 'Assigned') return false;
+            if (state.cardFilter === 'available' && asset.status !== 'Available' && asset.status !== 'Discovered') return false;
+            if (state.cardFilter === 'review' && !needsReview(asset)) return false;
+            if (state.cardFilter === 'repair' && asset.status !== 'In Repair') return false;
+            if (state.cardFilter === 'retired' && asset.status !== 'Retired') return false;
+            if (status && asset.status !== status) return false;
+            if (peripheralType && (!asset.peripheral || asset.peripheral.type !== peripheralType)) return false;
+            if (review === 'review' && !needsReview(asset)) return false;
+            if (review === 'clear' && needsReview(asset)) return false;
+            var automatic = asset.automatic || {};
+            if (presence === 'online' && !automatic.online) return false;
+            if (presence === 'offline' && automatic.online) return false;
+            if (presence.indexOf('stale') === 0) {
+                if (automatic.online || !automatic.lastSeen) return false;
+                var days = Number(presence.substring(5));
+                var lastSeen = new Date(automatic.lastSeen).getTime();
+                if (!isFinite(lastSeen) || lastSeen > (now - (days * 24 * 60 * 60 * 1000))) return false;
+            }
+            if (!search) return true;
+            var haystack = [
+                asset.name, asset.meshName, asset.status,
+                asset.identity && asset.identity.serial,
+                asset.identity && asset.identity.uuid,
+                asset.automatic && asset.automatic.manufacturer,
+                asset.automatic && asset.automatic.model,
+                asset.manualHardware && asset.manualHardware.manufacturer,
+                asset.manualHardware && asset.manualHardware.model,
+                asset.manualHardware && asset.manualHardware.osName,
+                asset.peripheral && asset.peripheral.type,
+                asset.peripheral && asset.peripheral.manufacturer,
+                asset.peripheral && asset.peripheral.model,
+                asset.links && asset.links.workstationName,
+                asset.manual && asset.manual.assetTag,
+                asset.manual && asset.manual.location,
+                assignmentText(asset)
+            ].join(' ').toLowerCase();
+            return haystack.indexOf(search) >= 0;
+        });
+    }
+
+    function renderRows() {
+        var filtered = filteredAssets();
+        var pages = Math.max(1, Math.ceil(filtered.length / state.pageSize));
+        if (state.page > pages) state.page = pages;
+        if (state.page < 1) state.page = 1;
+        var start = (state.page - 1) * state.pageSize;
+        var assets = filtered.slice(start, start + state.pageSize);
+        var body = byId('assetRows');
+        var head = byId('assetHead');
+        clear(body);
+        clear(head);
+        var header = document.createElement('tr');
+        var headings = state.activeTab === 'peripherals'
+            ? ['Type', 'Peripheral', 'Status', 'Assignee', 'Asset tag', 'Serial', 'Manufacturer / model', 'Linked workstation', 'Location']
+            : ['Device', 'Status', 'Assignee', 'Serial', 'UUID', 'Model', 'Location', 'Agent', 'Review'];
+        headings.forEach(function (heading) { header.appendChild(node('th', '', heading)); });
+        head.appendChild(header);
+        byId('resultCount').textContent = filtered.length ? ((start + 1) + '–' + (start + assets.length) + ' of ' + filtered.length) : '0 results';
+        byId('previousPage').disabled = state.page <= 1;
+        byId('nextPage').disabled = state.page >= pages;
+        byId('emptyState').style.display = filtered.length ? 'none' : 'block';
+        byId('emptyState').textContent = assetsForTab().length ? 'No assets match the current filters.' : (state.activeTab === 'peripherals' ? 'No peripherals have been added.' : 'No workstations found.');
+
+        assets.forEach(function (asset) {
+            var row = document.createElement('tr');
+            row.addEventListener('click', function () { openAsset(asset.id); });
+
+            if (state.activeTab === 'peripherals') {
+                row.appendChild(node('td', '', value(asset.peripheral && asset.peripheral.type, 'Other')));
+                var peripheralCell = document.createElement('td');
+                peripheralCell.className = 'inv-device-cell';
+                peripheralCell.appendChild(node('div', 'inv-device', asset.name || 'Unnamed peripheral'));
+                peripheralCell.appendChild(node('div', 'inv-muted', 'Manual · No agent'));
+                row.appendChild(peripheralCell);
+                var peripheralStatus = document.createElement('td');
+                peripheralStatus.appendChild(node('span', 'inv-badge ' + statusClass(asset.status), asset.status));
+                row.appendChild(peripheralStatus);
+                row.appendChild(node('td', '', assignmentText(asset)));
+                row.appendChild(node('td', 'inv-mono', value(asset.manual && asset.manual.assetTag, '—')));
+                row.appendChild(node('td', 'inv-mono', value(asset.identity && asset.identity.serial, '—')));
+                row.appendChild(node('td', '', [value(asset.peripheral && asset.peripheral.manufacturer), value(asset.peripheral && asset.peripheral.model)].filter(Boolean).join(' ') || '—'));
+                row.appendChild(node('td', '', value(asset.links && asset.links.workstationName, '—')));
+                row.appendChild(node('td', '', value(asset.manual && asset.manual.location, '—')));
+                body.appendChild(row);
+                return;
+            }
+
+            var deviceCell = document.createElement('td');
+            deviceCell.className = 'inv-device-cell';
+            deviceCell.appendChild(node('div', 'inv-device', asset.name || 'Unnamed device'));
+            deviceCell.appendChild(node('div', 'inv-muted', isManualWorkstation(asset) ? 'Manual · No agent' : (asset.meshName || 'No device group')));
+            row.appendChild(deviceCell);
+
+            var statusCell = document.createElement('td');
+            statusCell.appendChild(node('span', 'inv-badge ' + statusClass(asset.status), asset.status));
+            row.appendChild(statusCell);
+            row.appendChild(node('td', '', assignmentText(asset)));
+            row.appendChild(node('td', 'inv-mono', value(asset.identity && asset.identity.serial, '—')));
+            row.appendChild(node('td', 'inv-mono', value(asset.identity && asset.identity.uuid, '—')));
+            var workstationHardware = isManualWorkstation(asset) ? (asset.manualHardware || {}) : (asset.automatic || {});
+            row.appendChild(node('td', '', [value(workstationHardware.manufacturer), value(workstationHardware.model)].filter(Boolean).join(' ') || '—'));
+            row.appendChild(node('td', '', value(asset.manual && asset.manual.location, '—')));
+            row.appendChild(node('td', isManualWorkstation(asset) ? 'inv-muted' : (asset.automatic && asset.automatic.online ? 'inv-online' : 'inv-offline'), isManualWorkstation(asset) ? 'No agent' : (asset.automatic && asset.automatic.online ? 'Online' : 'Offline')));
+            row.appendChild(node('td', needsReview(asset) ? 'inv-review' : 'inv-muted', needsReview(asset) ? 'Review required' : 'Clear'));
+            body.appendChild(row);
+        });
+    }
+
+    function addField(list, label, content, className) {
+        list.appendChild(node('dt', '', label));
+        list.appendChild(node('dd', className || '', value(content, '—')));
+    }
+
+    function renderAssignment(asset) {
+        var assignment = asset.assignment || { mode: 'unassigned', assignees: [], pending: [] };
+        var summary = byId('assignmentSummary');
+        var review = byId('assignmentReview');
+        clear(summary);
+        clear(review);
+
+        var modeLine = node('div', 'inv-muted', 'Mode: ' + value(assignment.mode, 'unassigned'));
+        summary.appendChild(modeLine);
+        if ((assignment.assignees || []).length === 0) {
+            summary.appendChild(node('div', '', 'No assigned user'));
+        } else {
+            (assignment.assignees || []).forEach(function (user) {
+                summary.appendChild(node('div', 'inv-user', user.display || user.id));
+            });
+        }
+
+        if (can('can_manage') && (assignment.assignees || []).length > 0) {
+            var unassign = node('button', 'inv-button small', 'Unassign');
+            unassign.type = 'button';
+            unassign.addEventListener('click', function () { assignmentAction('unassign', {}); });
+            summary.appendChild(unassign);
+        }
+
+        var pending = assignment.pending || [];
+        if (pending.length > 0) review.appendChild(node('h3', 'inv-review', 'New signed-in users require review'));
+        pending.forEach(function (user) {
+            var line = node('div', 'inv-user');
+            var info = node('div');
+            info.appendChild(node('div', '', user.display || user.id));
+            info.appendChild(node('div', 'inv-muted', 'First seen ' + formatDate(user.firstSeen)));
+            line.appendChild(info);
+            if (can('can_manage')) {
+                var actions = node('div', 'inv-user-actions');
+                [['replace', 'Make assignee'], ['share', 'Mark shared'], ['dismiss', 'Dismiss']].forEach(function (definition) {
+                    var button = node('button', 'inv-button small', definition[1]);
+                    button.type = 'button';
+                    button.addEventListener('click', function () { assignmentAction(definition[0], user); });
+                    actions.appendChild(button);
+                });
+                line.appendChild(actions);
+            }
+            review.appendChild(line);
+        });
+
+        (asset.identityConflicts || []).forEach(function (conflict) {
+            var detail = 'Hardware identity conflict: ' + value(conflict.kind);
+            if (conflict.expected || conflict.observed) {
+                detail += ' (stored: ' + value(conflict.expected, '—') + ', reported: ' + value(conflict.observed, '—') + ')';
+            }
+            if (conflict.assetIds) detail += ' (' + conflict.assetIds.join(', ') + ')';
+            var conflictLine = node('div', 'inv-user');
+            conflictLine.appendChild(node('div', 'inv-review', detail));
+            if (can('can_manage') && (conflict.kind === 'uuid-mismatch' || conflict.kind === 'serial-mismatch')) {
+                var conflictActions = node('div', 'inv-user-actions');
+                var accept = node('button', 'inv-button small', 'Accept reported');
+                accept.type = 'button';
+                accept.addEventListener('click', function () {
+                    if (window.confirm('Replace the stored hardware identity with the reported value? This change will be recorded in audit history.')) {
+                        identityAction('accept', conflict);
+                    }
+                });
+                var keep = node('button', 'inv-button small', 'Keep stored');
+                keep.type = 'button';
+                keep.addEventListener('click', function () { identityAction('keep', conflict); });
+                conflictActions.appendChild(accept);
+                conflictActions.appendChild(keep);
+                conflictLine.appendChild(conflictActions);
+            }
+            review.appendChild(conflictLine);
+        });
+
+        (asset.duplicateConflicts || []).forEach(function (conflict) {
+            var matches = (conflict.matches || []).join(', ');
+            var source = conflict.otherSource === 'manual' ? 'manual' : 'automatic';
+            review.appendChild(node('div', 'inv-review', 'Possible duplicate ' + source + ' workstation: ' + value(conflict.otherName, conflict.otherAssetId) + (matches ? ' (matching ' + matches + ')' : '')));
+        });
+    }
+
+    function renderHistory(asset) {
+        var container = byId('historyList');
+        clear(container);
+        var history = (asset.history || []).slice().reverse();
+        if (!history.length) {
+            container.appendChild(node('div', 'inv-muted', 'No audit events recorded.'));
+            return;
+        }
+        var conflictHistory = history.filter(function (entry) { return entry.action === 'identity.conflict'; });
+        if (conflictHistory.length > 1) {
+            var group = document.createElement('details');
+            group.className = 'inv-history-item';
+            var groupTitle = document.createElement('summary');
+            groupTitle.className = 'inv-history-action';
+            groupTitle.textContent = 'identity.conflict · ' + conflictHistory.length + ' observations (expand)';
+            group.appendChild(groupTitle);
+            conflictHistory.forEach(function (entry) {
+                var nested = node('div', '', formatDate(entry.at) + ' · ' + value(entry.actor, 'system') + ' · ' + entry.details);
+                nested.style.marginTop = '7px';
+                group.appendChild(nested);
+            });
+            container.appendChild(group);
+            history = history.filter(function (entry) { return entry.action !== 'identity.conflict'; });
+        }
+        history.forEach(function (entry) {
+            var item = node('div', 'inv-history-item');
+            item.appendChild(node('div', 'inv-history-action', entry.action));
+            item.appendChild(node('div', '', entry.details));
+            item.appendChild(node('div', 'inv-muted', formatDate(entry.at) + ' · ' + value(entry.actor, 'system')));
+            container.appendChild(item);
+        });
+    }
+
+    function renderDetail(asset) {
+        var peripheral = isPeripheral(asset);
+        var manualWorkstation = isManualWorkstation(asset);
+        asset.identity = asset.identity || {};
+        asset.automatic = asset.automatic || {};
+        asset.manual = asset.manual || {};
+        asset.manualHardware = asset.manualHardware || {};
+        asset.peripheral = asset.peripheral || {};
+        asset.links = asset.links || {};
+        state.selected = asset;
+        state.activeTab = peripheral ? 'peripherals' : 'workstations';
+        byId('dashboard').classList.add('hidden');
+        byId('detail').classList.add('open');
+        byId('detailTitle').textContent = asset.name || 'Unnamed asset';
+        byId('detailSubtitle').textContent = peripheral
+            ? value(asset.peripheral.type, 'Peripheral') + ' · Manual · No agent'
+            : (manualWorkstation ? 'Manual · No agent' : value(asset.meshName, 'No device group')) + ' · ' + value(asset.identity.serial || asset.identity.uuid, 'No hardware identifier');
+        byId('statusInput').value = asset.status;
+        byId('assetTagInput').value = value(asset.manual.assetTag);
+        byId('locationInput').value = value(asset.manual.location);
+        byId('purchaseDateInput').value = value(asset.manual.purchaseDate);
+        byId('warrantyEndInput').value = value(asset.manual.warrantyEnd);
+        byId('notesInput').value = value(asset.manual.notes);
+
+        var hardware = byId('hardwareFields');
+        clear(hardware);
+        byId('peripheralEditSection').classList.toggle('inv-hidden', !peripheral);
+        byId('workstationEditSection').classList.toggle('inv-hidden', !manualWorkstation);
+        if (peripheral) {
+            byId('hardwareTitle').textContent = 'Inventory identity';
+            populateTypes(byId('peripheralTypeInput'), asset.peripheral.type);
+            populateWorkstations(byId('peripheralWorkstationInput'), asset.links.workstationAssetId);
+            byId('peripheralNameInput').value = value(asset.name);
+            byId('peripheralSerialInput').value = value(asset.identity.serial);
+            byId('peripheralManufacturerInput').value = value(asset.peripheral.manufacturer);
+            byId('peripheralModelInput').value = value(asset.peripheral.model);
+            byId('peripheralUserInput').value = value((asset.assignment && asset.assignment.assignees && asset.assignment.assignees[0]) && (asset.assignment.assignees[0].display || asset.assignment.assignees[0].id));
+            addField(hardware, 'Type', asset.peripheral.type);
+            addField(hardware, 'Serial', asset.identity.serial, 'inv-mono');
+            addField(hardware, 'Asset tag', asset.manual.assetTag, 'inv-mono');
+            addField(hardware, 'Manufacturer', asset.peripheral.manufacturer);
+            addField(hardware, 'Model', asset.peripheral.model);
+            addField(hardware, 'Linked workstation', asset.links.workstationName);
+            addField(hardware, 'Source', 'Manual · No agent');
+            addField(hardware, 'Created', formatDate(asset.createdAt));
+        } else if (manualWorkstation) {
+            byId('hardwareTitle').textContent = 'Inventory identity';
+            byId('workstationNameInput').value = value(asset.name);
+            byId('workstationSerialInput').value = value(asset.identity.serial);
+            byId('workstationUuidInput').value = value(asset.identity.uuid);
+            byId('workstationManufacturerInput').value = value(asset.manualHardware.manufacturer);
+            byId('workstationModelInput').value = value(asset.manualHardware.model);
+            byId('workstationOsInput').value = value(asset.manualHardware.osName);
+            byId('workstationUserInput').value = value((asset.assignment && asset.assignment.assignees && asset.assignment.assignees[0]) && (asset.assignment.assignees[0].display || asset.assignment.assignees[0].id));
+            addField(hardware, 'Serial', asset.identity.serial, 'inv-mono');
+            addField(hardware, 'UUID', asset.identity.uuid, 'inv-mono');
+            addField(hardware, 'Asset tag', asset.manual.assetTag, 'inv-mono');
+            addField(hardware, 'Manufacturer', asset.manualHardware.manufacturer);
+            addField(hardware, 'Model', asset.manualHardware.model);
+            addField(hardware, 'Operating system', asset.manualHardware.osName);
+            addField(hardware, 'Source', 'Manual · No agent');
+            addField(hardware, 'Created', formatDate(asset.createdAt));
+        } else {
+            byId('hardwareTitle').textContent = 'Hardware identity';
+            addField(hardware, 'Serial', asset.identity.serial, 'inv-mono');
+            addField(hardware, 'UUID', asset.identity.uuid, 'inv-mono');
+            addField(hardware, 'Reported asset tag', asset.automatic.assetTagReported);
+            addField(hardware, 'Manufacturer', asset.automatic.manufacturer);
+            addField(hardware, 'Model', asset.automatic.model);
+            addField(hardware, 'Operating system', asset.automatic.osName);
+            addField(hardware, 'CPU', asset.automatic.cpu);
+            addField(hardware, 'Memory', formatBytes(asset.automatic.memoryBytes));
+            addField(hardware, 'Storage devices', (asset.automatic.storage || []).length);
+            addField(hardware, 'Last seen', formatDate(asset.automatic.lastSeen));
+            addField(hardware, 'MeshCentral node', asset.nodeid, 'inv-mono');
+        }
+
+        renderAssignment(asset);
+        renderHistory(asset);
+        byId('saveButton').style.display = can('can_manage') ? '' : 'none';
+        var nodeMissing = asset.automatic && asset.automatic.nodeExists === false;
+        byId('openDeviceButton').style.display = !peripheral && asset.nodeid && !nodeMissing ? '' : 'none';
+        byId('deleteButton').style.display = can('can_manage') && (peripheral || manualWorkstation || nodeMissing) ? '' : 'none';
+    }
+
+    function openAsset(id) {
+        var known = state.assets.find(function (asset) { return asset.id === id; });
+        if (known) state.activeTab = isPeripheral(known) ? 'peripherals' : 'workstations';
+        setAssetUrl(id);
+        send('get', { assetId: id });
+    }
+
+    function closeDetail() {
+        state.selected = null;
+        setAssetUrl('');
+        byId('detail').classList.remove('open');
+        byId('dashboard').classList.remove('hidden');
+        renderSummary();
+        renderRows();
+        if (boot.mode === 'device') return;
+        try { history.replaceState(null, '', location.pathname + location.search); } catch (error) { }
+    }
+
+    function saveAsset() {
+        if (!state.selected) return;
+        var changes = {
+            status: byId('statusInput').value,
+            assetTag: byId('assetTagInput').value,
+            location: byId('locationInput').value,
+            purchaseDate: byId('purchaseDateInput').value,
+            warrantyEnd: byId('warrantyEndInput').value,
+            notes: byId('notesInput').value
+        };
+        if (isPeripheral(state.selected)) {
+            changes.peripheralType = byId('peripheralTypeInput').value;
+            changes.name = byId('peripheralNameInput').value;
+            changes.serial = byId('peripheralSerialInput').value;
+            changes.manufacturer = byId('peripheralManufacturerInput').value;
+            changes.model = byId('peripheralModelInput').value;
+            changes.assignedUser = byId('peripheralUserInput').value;
+            changes.linkedWorkstation = byId('peripheralWorkstationInput').value;
+        } else if (isManualWorkstation(state.selected)) {
+            changes.name = byId('workstationNameInput').value;
+            changes.serial = byId('workstationSerialInput').value;
+            changes.uuid = byId('workstationUuidInput').value;
+            changes.manufacturer = byId('workstationManufacturerInput').value;
+            changes.model = byId('workstationModelInput').value;
+            changes.osName = byId('workstationOsInput').value;
+            changes.assignedUser = byId('workstationUserInput').value;
+        }
+        send('update', {
+            assetId: state.selected.id,
+            changes: changes
+        });
+    }
+
+    function assignmentAction(action, user) {
+        if (!state.selected) return;
+        send('assignment', { assetId: state.selected.id, assignmentAction: action, user: user });
+    }
+
+    function identityAction(action, conflict) {
+        if (!state.selected) return;
+        send('identity', { assetId: state.selected.id, identityAction: action, conflict: conflict });
+    }
+
+    function deleteAsset() {
+        if (!state.selected || !can('can_manage')) return;
+        var name = state.selected.name || 'this asset';
+        if (!window.confirm('Permanently delete the inventory record for "' + name + '"?\n\nThis removes its manual fields, assignments, and audit history. This cannot be undone.')) return;
+        send('delete', { assetId: state.selected.id, confirm: true });
+    }
+
+    var peripheralCsvFields = ['type', 'name', 'asset_tag', 'serial', 'manufacturer', 'model', 'assigned_user', 'linked_workstation', 'status', 'location', 'purchase_date', 'warranty_end', 'notes'];
+
+    function csvText(rows) {
+        return rows.map(function (row) {
+            return row.map(function (cell) { return '"' + value(cell).replace(/"/g, '""') + '"'; }).join(',');
+        }).join('\r\n');
+    }
+
+    function downloadCsv(filename, rows) {
+        var blob = new Blob(['\ufeff' + csvText(rows)], { type: 'text/csv;charset=utf-8' });
+        var objectUrl = URL.createObjectURL(blob);
+        var link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 1000);
+    }
+
+    function exportCsv() {
+        var rows;
+        if (state.activeTab === 'peripherals') {
+            rows = [peripheralCsvFields];
+            filteredAssets().forEach(function (asset) {
+                var assignee = asset.assignment && asset.assignment.assignees && asset.assignment.assignees[0];
+                rows.push([
+                    asset.peripheral && asset.peripheral.type, asset.name, asset.manual && asset.manual.assetTag,
+                    asset.identity && asset.identity.serial, asset.peripheral && asset.peripheral.manufacturer,
+                    asset.peripheral && asset.peripheral.model, assignee && (assignee.display || assignee.id),
+                    asset.links && (asset.links.workstationAssetId || asset.links.workstationName), asset.status,
+                    asset.manual && asset.manual.location, asset.manual && asset.manual.purchaseDate,
+                    asset.manual && asset.manual.warrantyEnd, asset.manual && asset.manual.notes
+                ]);
+            });
+            downloadCsv('meshcentral-peripherals-' + new Date().toISOString().substring(0, 10) + '.csv', rows);
+            return;
+        }
+        rows = [['Device', 'Group', 'Status', 'Assignment mode', 'Assignees', 'Serial', 'UUID', 'Manufacturer', 'Model', 'Asset tag', 'Location', 'Operating system', 'Online', 'Last seen']];
+        filteredAssets().forEach(function (asset) {
+            var hardware = isManualWorkstation(asset) ? (asset.manualHardware || {}) : (asset.automatic || {});
+            rows.push([
+                asset.name, asset.meshName, asset.status, asset.assignment.mode,
+                (asset.assignment.assignees || []).map(function (item) { return item.display || item.id; }).join('; '),
+                asset.identity.serial, asset.identity.uuid, hardware.manufacturer, hardware.model,
+                asset.manual.assetTag, asset.manual.location, hardware.osName,
+                isManualWorkstation(asset) ? 'No agent' : (asset.automatic.online ? 'Yes' : 'No'), asset.automatic.lastSeen ? new Date(asset.automatic.lastSeen).toISOString() : ''
+            ]);
+        });
+        downloadCsv('meshcentral-workstations-' + new Date().toISOString().substring(0, 10) + '.csv', rows);
+    }
+
+    function downloadPeripheralTemplate() {
+        downloadCsv('peripheral-import-template.csv', [peripheralCsvFields]);
+    }
+
+    function resetWorkstationForm() {
+        ['addWorkstationName', 'addWorkstationAssetTag', 'addWorkstationSerial', 'addWorkstationUuid', 'addWorkstationManufacturer', 'addWorkstationModel', 'addWorkstationOs', 'addWorkstationUser', 'addWorkstationLocation', 'addWorkstationPurchaseDate', 'addWorkstationWarrantyEnd', 'addWorkstationNotes'].forEach(function (id) { byId(id).value = ''; });
+        byId('addWorkstationStatus').value = 'Available';
+    }
+
+    function openWorkstationModal() {
+        resetWorkstationForm();
+        byId('workstationModal').classList.remove('inv-hidden');
+        byId('addWorkstationName').focus();
+    }
+
+    function closeWorkstationModal() {
+        byId('workstationModal').classList.add('inv-hidden');
+    }
+
+    function workstationFormValue() {
+        return {
+            name: byId('addWorkstationName').value,
+            asset_tag: byId('addWorkstationAssetTag').value,
+            serial: byId('addWorkstationSerial').value,
+            uuid: byId('addWorkstationUuid').value,
+            manufacturer: byId('addWorkstationManufacturer').value,
+            model: byId('addWorkstationModel').value,
+            os_name: byId('addWorkstationOs').value,
+            assigned_user: byId('addWorkstationUser').value,
+            status: byId('addWorkstationStatus').value,
+            location: byId('addWorkstationLocation').value,
+            purchase_date: byId('addWorkstationPurchaseDate').value,
+            warranty_end: byId('addWorkstationWarrantyEnd').value,
+            notes: byId('addWorkstationNotes').value
+        };
+    }
+
+    function saveWorkstation() {
+        send('workstation-create', { workstation: workstationFormValue() });
+    }
+
+    function resetPeripheralForm() {
+        ['addName', 'addAssetTag', 'addSerial', 'addManufacturer', 'addModel', 'addAssignedUser', 'addLocation', 'addPurchaseDate', 'addWarrantyEnd', 'addNotes'].forEach(function (id) { byId(id).value = ''; });
+        byId('addType').value = state.peripheralTypes[0] || 'Mouse';
+        byId('addWorkstation').value = '';
+        byId('addStatus').value = 'Available';
+    }
+
+    function openPeripheralModal() {
+        populateTypes(byId('addType'), state.peripheralTypes[0]);
+        populateWorkstations(byId('addWorkstation'), '');
+        resetPeripheralForm();
+        byId('peripheralModal').classList.remove('inv-hidden');
+        byId('addType').focus();
+    }
+
+    function closePeripheralModal() {
+        byId('peripheralModal').classList.add('inv-hidden');
+        state.keepAddAnother = false;
+    }
+
+    function peripheralFormValue() {
+        return {
+            type: byId('addType').value,
+            name: byId('addName').value,
+            asset_tag: byId('addAssetTag').value,
+            serial: byId('addSerial').value,
+            manufacturer: byId('addManufacturer').value,
+            model: byId('addModel').value,
+            assigned_user: byId('addAssignedUser').value,
+            linked_workstation: byId('addWorkstation').value,
+            status: byId('addStatus').value,
+            location: byId('addLocation').value,
+            purchase_date: byId('addPurchaseDate').value,
+            warranty_end: byId('addWarrantyEnd').value,
+            notes: byId('addNotes').value
+        };
+    }
+
+    function savePeripheral(keepOpen) {
+        state.keepAddAnother = keepOpen === true;
+        send('peripheral-create', { peripheral: peripheralFormValue() });
+    }
+
+    function parseCsv(text) {
+        var rows = [], row = [], field = '', quoted = false;
+        text = value(text).replace(/^\ufeff/, '');
+        for (var index = 0; index < text.length; index++) {
+            var character = text[index];
+            if (quoted) {
+                if (character === '"' && text[index + 1] === '"') { field += '"'; index++; }
+                else if (character === '"') quoted = false;
+                else field += character;
+            } else if (character === '"') quoted = true;
+            else if (character === ',') { row.push(field); field = ''; }
+            else if (character === '\n') { row.push(field.replace(/\r$/, '')); rows.push(row); row = []; field = ''; }
+            else field += character;
+        }
+        if (quoted) throw new Error('The CSV contains an unclosed quoted field.');
+        if (field || row.length) { row.push(field.replace(/\r$/, '')); rows.push(row); }
+        rows = rows.filter(function (cells) { return cells.some(function (cell) { return value(cell).trim() !== ''; }); });
+        if (rows.length < 2) throw new Error('The CSV must contain a header and at least one peripheral row.');
+        var headers = rows[0].map(function (header) { return value(header).trim().toLowerCase().replace(/[\s-]+/g, '_'); });
+        if (headers.indexOf('type') < 0) throw new Error('The CSV requires a "type" column. Download the template for the supported columns.');
+        var unknown = headers.filter(function (header) { return peripheralCsvFields.indexOf(header) < 0; });
+        if (unknown.length) throw new Error('Unsupported CSV column' + (unknown.length === 1 ? ': ' : 's: ') + unknown.join(', ') + '.');
+        var duplicateHeaders = headers.filter(function (header, index) { return headers.indexOf(header) !== index; });
+        if (duplicateHeaders.length) throw new Error('Duplicate CSV column: ' + duplicateHeaders[0] + '.');
+        if (rows.length - 1 > 500) throw new Error('A maximum of 500 peripherals can be imported at once.');
+        return rows.slice(1).map(function (cells, index) {
+            if (cells.length > headers.length) throw new Error('CSV row ' + (index + 2) + ' has more columns than the header.');
+            var record = { rowNumber: index + 2 };
+            headers.forEach(function (header, column) { record[header] = value(cells[column]).trim(); });
+            return record;
+        });
+    }
+
+    function closeImportModal() {
+        byId('importModal').classList.add('inv-hidden');
+        state.importRows = [];
+        state.importPreview = [];
+    }
+
+    function renderImportPreview(rows) {
+        state.importPreview = rows || [];
+        var invalid = state.importPreview.filter(function (row) { return row.errors && row.errors.length; }).length;
+        byId('importSummary').textContent = state.importPreview.length + ' row' + (state.importPreview.length === 1 ? '' : 's') + ' · ' + (invalid ? invalid + ' require correction' : 'all rows valid');
+        byId('importSummary').classList.toggle('inv-import-errors', invalid > 0);
+        var body = byId('importPreviewRows');
+        clear(body);
+        state.importPreview.forEach(function (row) {
+            var valueObject = row.value || {};
+            var tr = document.createElement('tr');
+            [row.rowNumber, valueObject.peripheralType, valueObject.name, valueObject.assetTag, valueObject.serial, valueObject.assignedUser,
+                row.linkedWorkstation ? row.linkedWorkstation.name : valueObject.linkedWorkstation,
+                row.errors && row.errors.length ? row.errors.join(' ') : 'Ready'].forEach(function (cell, index) {
+                tr.appendChild(node('td', index === 7 && row.errors && row.errors.length ? 'inv-import-errors' : '', value(cell, '—')));
+            });
+            body.appendChild(tr);
+        });
+        byId('confirmImport').disabled = invalid > 0 || state.importPreview.length === 0;
+        byId('importModal').classList.remove('inv-hidden');
+    }
+
+    function selectCsvFile(event) {
+        var file = event.target.files && event.target.files[0];
+        event.target.value = '';
+        if (!file) return;
+        if (file.size > 1024 * 1024) { showToast('CSV files are limited to 1 MB.', true); return; }
+        var reader = new FileReader();
+        reader.onload = function () {
+            try {
+                state.importRows = parseCsv(reader.result);
+                send('peripheral-preview', { rows: state.importRows });
+            } catch (error) { showToast(error.message || String(error), true); }
+        };
+        reader.onerror = function () { showToast('The CSV file could not be read.', true); };
+        reader.readAsText(file);
+    }
+
+    function receive(message) {
+        // MeshCentral delivers plugin responses through the parent page. More
+        // than one Inventory iframe can exist there (the dashboard plus a
+        // per-device tab), so only the frame that created this request may
+        // consume its response.
+        if (!message || !message.requestId || !state.pendingRequests[message.requestId]) return false;
+        var pending = state.pendingRequests[message.requestId];
+        delete state.pendingRequests[message.requestId];
+        if (message.requestId === state.pendingListRequestId) state.pendingListRequestId = '';
+        setLoading(Object.keys(state.pendingRequests).length > 0);
+        if (!message.ok) {
+            if (pending.action === 'get' && !state.selected) setAssetUrl('');
+            showToast(message.error || 'Inventory request failed.', true);
+            return true;
+        }
+        var result = message.result || {};
+        if (result.kind === 'list') {
+            state.pendingListRequestId = '';
+            state.assets = result.assets || [];
+            state.permissions = result.permissions || state.permissions;
+            state.peripheralTypes = result.peripheralTypes || state.peripheralTypes;
+            setActiveTab(state.activeTab, false);
+            if (boot.nodeid) {
+                var matching = state.assets.find(function (asset) { return asset.nodeid === boot.nodeid || (asset.nodeids || []).indexOf(boot.nodeid) >= 0; });
+                if (matching) openAsset(matching.id);
+                else showToast('This device has not been synchronized into inventory yet.', true);
+            } else if (state.requestedAssetId && !state.selected) {
+                var requested = state.assets.find(function (asset) { return asset.id === state.requestedAssetId; });
+                if (requested) openAsset(requested.id);
+                else {
+                    setAssetUrl('');
+                    showToast('The requested inventory asset no longer exists.', true);
+                }
+            }
+        } else if (result.kind === 'asset') {
+            var asset = result.asset;
+            var index = state.assets.findIndex(function (item) { return item.id === asset.id; });
+            if (index >= 0) state.assets[index] = asset;
+            renderSummary();
+            renderRows();
+            renderDetail(asset);
+        } else if (result.kind === 'deleted') {
+            state.assets = state.assets.filter(function (asset) { return asset.id !== result.assetId; });
+            closeDetail();
+            showToast('Inventory record permanently deleted.');
+        } else if (result.kind === 'workstation-created') {
+            var workstation = result.asset;
+            var workstationIndex = state.assets.findIndex(function (item) { return item.id === workstation.id; });
+            if (workstationIndex >= 0) state.assets[workstationIndex] = workstation;
+            else state.assets.push(workstation);
+            state.assets.sort(function (a, b) { return value(a.name).localeCompare(value(b.name)); });
+            closeWorkstationModal();
+            setActiveTab('workstations', true);
+            showToast('Workstation added.');
+        } else if (result.kind === 'peripheral-preview') {
+            renderImportPreview(result.rows || []);
+        } else if (result.kind === 'peripheral-created' || result.kind === 'peripheral-imported') {
+            (result.assets || []).forEach(function (asset) {
+                var index = state.assets.findIndex(function (item) { return item.id === asset.id; });
+                if (index >= 0) state.assets[index] = asset;
+                else state.assets.push(asset);
+            });
+            state.assets.sort(function (a, b) { return value(a.name).localeCompare(value(b.name)); });
+            state.activeTab = 'peripherals';
+            setActiveTab('peripherals', true);
+            if (result.kind === 'peripheral-created') {
+                if (state.keepAddAnother) {
+                    var rememberedType = byId('addType').value;
+                    resetPeripheralForm();
+                    byId('addType').value = rememberedType;
+                    byId('addType').focus();
+                    state.keepAddAnother = false;
+                } else closePeripheralModal();
+                showToast('Peripheral added.');
+            } else {
+                var importedCount = Number(result.count) || (result.assets || []).length;
+                closeImportModal();
+                showToast(importedCount + ' peripheral' + (importedCount === 1 ? '' : 's') + ' imported.');
+            }
+        } else if (result.kind === 'rescan') {
+            showToast('Inventory synchronization completed.');
+            send('list', {});
+        }
+        return true;
+    }
+
+    function initialize() {
+        syncTheme();
+        state.requestedAssetId = readRequestedAsset();
+        state.activeTab = readRequestedTab();
+        try {
+            var parentDocument = window.parent.document;
+            new MutationObserver(syncTheme).observe(parentDocument.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
+            var theme = parentDocument.getElementById('theme-stylesheet');
+            if (theme) {
+                new MutationObserver(syncTheme).observe(theme, { attributes: true, attributeFilter: ['href'] });
+                theme.addEventListener('load', syncTheme);
+            }
+            byId('inventoryTheme').addEventListener('load', syncTheme);
+        } catch (error) { }
+
+        (boot.lifecycleStates || []).forEach(function (status) {
+            byId('statusFilter').appendChild(new Option(status, status));
+            byId('statusInput').appendChild(new Option(status, status));
+            byId('addStatus').appendChild(new Option(status, status));
+            byId('addWorkstationStatus').appendChild(new Option(status, status));
+        });
+        populateTypes(byId('peripheralTypeInput'), 'Mouse');
+        populateTypes(byId('addType'), 'Mouse');
+        state.peripheralTypes.forEach(function (type) { byId('typeFilter').appendChild(new Option(type, type)); });
+        byId('workstationsTab').addEventListener('click', function () { setActiveTab('workstations', true); });
+        byId('peripheralsTab').addEventListener('click', function () { setActiveTab('peripherals', true); });
+        byId('searchInput').addEventListener('input', function () { state.page = 1; renderRows(); });
+        byId('statusFilter').addEventListener('change', function () { state.page = 1; state.cardFilter = ''; renderSummary(); renderRows(); });
+        byId('typeFilter').addEventListener('change', function () { state.page = 1; renderRows(); });
+        byId('reviewFilter').addEventListener('change', function () { state.page = 1; state.cardFilter = ''; renderSummary(); renderRows(); });
+        byId('presenceFilter').addEventListener('change', function () { state.page = 1; renderRows(); });
+        byId('pageSize').addEventListener('change', function () { state.pageSize = Number(this.value) || 25; state.page = 1; renderRows(); });
+        byId('previousPage').addEventListener('click', function () { if (state.page > 1) { state.page--; renderRows(); } });
+        byId('nextPage').addEventListener('click', function () { var pages = Math.max(1, Math.ceil(filteredAssets().length / state.pageSize)); if (state.page < pages) { state.page++; renderRows(); } });
+        byId('backButton').addEventListener('click', closeDetail);
+        byId('saveButton').addEventListener('click', saveAsset);
+        byId('deleteButton').addEventListener('click', deleteAsset);
+        byId('exportButton').addEventListener('click', exportCsv);
+        byId('rescanButton').addEventListener('click', function () { send('rescan', {}); });
+        byId('addWorkstationButton').addEventListener('click', openWorkstationModal);
+        byId('closeWorkstationModal').addEventListener('click', closeWorkstationModal);
+        byId('cancelWorkstation').addEventListener('click', closeWorkstationModal);
+        byId('saveWorkstation').addEventListener('click', saveWorkstation);
+        byId('templateButton').addEventListener('click', downloadPeripheralTemplate);
+        byId('importButton').addEventListener('click', function () { byId('importFileInput').click(); });
+        byId('importFileInput').addEventListener('change', selectCsvFile);
+        byId('addPeripheralButton').addEventListener('click', openPeripheralModal);
+        byId('closePeripheralModal').addEventListener('click', closePeripheralModal);
+        byId('cancelPeripheral').addEventListener('click', closePeripheralModal);
+        byId('savePeripheral').addEventListener('click', function () { savePeripheral(false); });
+        byId('saveAndAnotherPeripheral').addEventListener('click', function () { savePeripheral(true); });
+        byId('closeImportModal').addEventListener('click', closeImportModal);
+        byId('cancelImport').addEventListener('click', closeImportModal);
+        byId('confirmImport').addEventListener('click', function () { send('peripheral-import', { rows: state.importRows }); });
+        byId('addAssignedUser').addEventListener('input', function () {
+            if (this.value.trim()) byId('addStatus').value = 'Assigned';
+            else if (byId('addStatus').value === 'Assigned') byId('addStatus').value = 'Available';
+        });
+        byId('addWorkstationUser').addEventListener('input', function () {
+            if (this.value.trim()) byId('addWorkstationStatus').value = 'Assigned';
+            else if (byId('addWorkstationStatus').value === 'Assigned') byId('addWorkstationStatus').value = 'Available';
+        });
+        byId('workstationUserInput').addEventListener('input', function () {
+            if (this.value.trim()) byId('statusInput').value = 'Assigned';
+            else if (byId('statusInput').value === 'Assigned') byId('statusInput').value = 'Available';
+        });
+        byId('peripheralUserInput').addEventListener('input', function () {
+            if (this.value.trim()) byId('statusInput').value = 'Assigned';
+            else if (byId('statusInput').value === 'Assigned') byId('statusInput').value = 'Available';
+        });
+        byId('openDeviceButton').addEventListener('click', function () {
+            if (state.selected && state.selected.nodeid && window.parent.gotoDevice) window.parent.gotoDevice(state.selected.nodeid, 10);
+        });
+        if (boot.mode === 'device') {
+            byId('backButton').style.display = 'none';
+            byId('inventoryTabs').classList.add('inv-hidden');
+        }
+        setActiveTab(state.activeTab, false);
+        send('list', {});
+    }
+
+    window.InventoryApp = {
+        receive: receive,
+        refresh: function () { send('list', {}); },
+        back: function () {
+            if (!state.selected) return false;
+            closeDetail();
+            return true;
+        }
+    };
+    initialize();
+})();
+</script>
+</body>
+</html>

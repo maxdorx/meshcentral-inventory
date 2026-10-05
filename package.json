@@ -1,0 +1,16 @@
+{
+  "name": "meshcentral-asset-inventory",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Asset lifecycle and endpoint-user assignment plugin for MeshCentral",
+  "main": "inventory.js",
+  "scripts": {
+    "check": "node --check inventory.js && node --check lib/model.js && node --test",
+    "test": "node --test",
+    "package": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package.ps1"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "Apache-2.0"
+}
