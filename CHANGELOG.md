@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.2 - 2026-10-06
+
+- Changed the URL installer to the immutable GitHub tag archive so MeshCentral deployments whose outbound filtering blocks GitHub's Release Assets host can download updates through `codeload.github.com`.
+- Kept the installer pinned to the tested release tag rather than mutable branch contents.
+
 ## 1.1.1 - 2026-10-06
 
 - Expanded the Inventory dashboard and detail views to use the full remaining MeshCentral viewport and full iframe width.
