@@ -187,6 +187,95 @@ test('replacing an assignee does not immediately requeue the displaced present u
     assert.equal(asset.assignment.resolutions.find((item) => item.id === user1.id).armed, false);
 });
 
+test('manual assignment survives an empty agent report and flags a different reported user once', () => {
+    const snapshot = sampleSnapshot({ reportedUsers: [] });
+    const asset = model.createAsset('inventoryasset//mac', '', snapshot, 1000);
+    model.applySnapshot(asset, snapshot, 1000, 'agent', []);
+    model.assignmentAction(asset, 'manual-replace', { display: 'Owner@example.com' }, 'user//admin', 2000);
+    assert.equal(asset.status, 'Assigned');
+    assert.equal(asset.assignment.assignees[0].source, 'manual');
+    model.applySnapshot(asset, snapshot, 3000, 'agent', []);
+    assert.equal(asset.assignment.assignees[0].id, 'owner@example.com');
+    model.applySnapshot(asset, sampleSnapshot({ reportedUsers: [{ id: 'owner@example.com', display: 'owner@example.com' }] }), 4000, 'agent', []);
+    assert.deepEqual(asset.assignment.pending, []);
+    const other = sampleSnapshot({ reportedUsers: [{ id: 'other@example.com', display: 'other@example.com' }] });
+    model.applySnapshot(asset, other, 5000, 'agent', []);
+    model.applySnapshot(asset, other, 6000, 'agent', []);
+    assert.deepEqual(asset.assignment.assignees.map((item) => item.id), ['owner@example.com']);
+    assert.deepEqual(asset.assignment.pending.map((item) => item.id), ['other@example.com']);
+    assert.equal(asset.history.filter((item) => item.action === 'assignment.manual').length, 1);
+});
+
+test('stale policy follows removal days and validates custom thresholds', () => {
+    assert.deepEqual(model.stalePolicy({ mode: 'meshcentral' }, 14), { enabled: true, days: 13, removalDays: 14, warning: false });
+    assert.equal(model.stalePolicy({ mode: 'meshcentral' }, null).days, 30);
+    assert.equal(model.stalePolicy({ mode: 'custom', days: 14 }, 14).warning, true);
+    assert.equal(model.stalePolicy({ mode: 'disabled' }, 14).enabled, false);
+    assert.throws(() => model.stalePolicy({ mode: 'custom', days: 0 }, 14), /threshold/);
+});
+
+test('stale and missing reviews are idempotent, and reconnect rearms the next offline cycle', () => {
+    const day = 86400000;
+    const asset = model.createAsset('inventoryasset//presence', '', sampleSnapshot(), day);
+    model.applySnapshot(asset, sampleSnapshot(), day, 'agent', []);
+    model.applySnapshot(asset, sampleSnapshot({ online: false, userReportAuthoritative: false }), day * 5, 'synchronizer', []);
+    const policy = model.stalePolicy({ mode: 'custom', days: 3 }, null);
+    model.evaluateReviews(asset, policy, day * 5);
+    model.evaluateReviews(asset, policy, day * 6);
+    assert.equal(asset.status, 'Assigned');
+    assert.deepEqual(asset.reviews.map((item) => item.reason), ['stale-device']);
+    assert.equal(asset.history.filter((item) => item.action === 'review.stale-device').length, 1);
+    model.reviewAction(asset, 'acknowledge', 'stale-device', '', 'user//admin', day * 6);
+    model.evaluateReviews(asset, policy, day * 6);
+    assert.deepEqual(asset.reviews, []);
+    asset.automatic.nodeExists = false;
+    model.evaluateReviews(asset, policy, day * 6);
+    assert.deepEqual(asset.reviews.map((item) => item.reason), ['node-missing']);
+    assert.equal(asset.status, 'Assigned');
+    model.reviewAction(asset, 'acknowledge', 'node-missing', '', 'user//admin', day * 6);
+    model.evaluateReviews(asset, policy, day * 7);
+    assert.deepEqual(asset.reviews, []);
+    assert.equal(asset.automatic.condition, 'Node missing');
+    model.applySnapshot(asset, sampleSnapshot(), day * 8, 'agent', []);
+    model.evaluateReviews(asset, policy, day * 8);
+    assert.equal(asset.presence.acknowledgedReason, undefined);
+    model.applySnapshot(asset, sampleSnapshot({ online: false, userReportAuthoritative: false }), day * 12, 'synchronizer', []);
+    model.evaluateReviews(asset, policy, day * 12);
+    assert.deepEqual(asset.reviews.map((item) => item.reason), ['stale-device']);
+    assert.equal(asset.automatic.condition, 'Stale');
+});
+
+test('archived records stay archived when their agent returns and require restoration', () => {
+    const day = 86400000;
+    const asset = model.createAsset('inventoryasset//archived', '', sampleSnapshot(), day);
+    model.applySnapshot(asset, sampleSnapshot(), day, 'agent', []);
+    asset.automatic.nodeExists = false;
+    asset.automatic.online = false;
+    model.evaluateReviews(asset, model.stalePolicy({ mode: 'meshcentral' }, null), day * 2);
+    model.reviewAction(asset, 'archive', 'node-missing', '', 'user//admin', day * 2);
+    assert.equal(asset.recordState, 'Archived');
+    assert.equal(asset.status, 'Assigned');
+    model.applySnapshot(asset, sampleSnapshot(), day * 3, 'agent', []);
+    model.evaluateReviews(asset, model.stalePolicy({ mode: 'meshcentral' }, null), day * 3);
+    model.evaluateReviews(asset, model.stalePolicy({ mode: 'meshcentral' }, null), day * 4);
+    assert.equal(asset.recordState, 'Archived');
+    assert.equal(asset.history.filter((item) => item.action === 'review.archived-returned').length, 1);
+    model.reviewAction(asset, 'restore', '', '', 'user//admin', day * 4);
+    assert.equal(asset.recordState, 'Active');
+    assert.deepEqual(asset.reviews, []);
+});
+
+test('assigned without an assignee is reviewed once until manual assignment resolves it', () => {
+    const asset = model.createAsset('inventoryasset//unassigned', '', sampleSnapshot({ reportedUsers: [] }), 1000);
+    asset.status = 'Assigned';
+    model.evaluateReviews(asset, null, 2000);
+    model.evaluateReviews(asset, null, 3000);
+    assert.deepEqual(asset.reviews.map((item) => item.reason), ['assignment-missing']);
+    assert.equal(asset.history.filter((item) => item.action === 'review.assignment-missing').length, 1);
+    model.assignmentAction(asset, 'manual-replace', { display: 'owner@example.com' }, 'user//admin', 4000);
+    assert.deepEqual(asset.reviews, []);
+});
+
 test('prefers UUID identity and does not merge a reused serial with a different UUID', () => {
     const bySerial = { _id: 'a', identity: { serial: 'SERIAL-042', uuid: 'uuid-a' }, createdAt: 1 };
     const byUuid = { _id: 'b', identity: { serial: 'SERIAL-B', uuid: '2e1efb37-4707-4a5f-861f-fbb8c30dc001' }, createdAt: 2 };

@@ -73,6 +73,35 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         });
     }
 
+    async function domainSettings(domain) {
+        const saved = await dbGet(`inventorysettings/${domain}`);
+        return saved && saved.type === 'inventorysettings' ? { mode: saved.mode, days: saved.days } : { mode: 'meshcentral', days: 30 };
+    }
+
+    function removalDays(domain, meshid) {
+        const mesh = webServer() && webServer().meshes && webServer().meshes[meshid];
+        const groupDays = mesh && Number(mesh.expireDevs);
+        if (Number.isInteger(groupDays) && groupDays >= 1 && groupDays <= 2000) return groupDays;
+        const configuredDomain = root.config && root.config.domains && root.config.domains[domain];
+        const days = configuredDomain && Number(configuredDomain.autoremoveinactivedevices);
+        return Number.isInteger(days) && days >= 1 && days <= 2000 ? days : null;
+    }
+
+    function policyForAsset(asset, settings) {
+        return model.stalePolicy(settings, removalDays(asset.domain, asset.meshid));
+    }
+
+    function settingsWarning(domain, settings) {
+        if (!settings || settings.mode !== 'custom') return '';
+        const thresholds = [removalDays(domain, '')];
+        const meshes = webServer() && webServer().meshes || {};
+        for (const [meshid, mesh] of Object.entries(meshes)) {
+            if (mesh && mesh.domain === domain) thresholds.push(removalDays(domain, meshid));
+        }
+        if (thresholds.some((days) => days && settings.days >= days)) return 'The custom stale threshold reaches or exceeds a MeshCentral removal threshold. The node may disappear before it is marked stale.';
+        return '';
+    }
+
     function withQueue(key, work) {
         const previous = queues.get(key) || Promise.resolve();
         const current = previous.catch(() => {}).then(work);
@@ -258,7 +287,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         return Boolean(server && server.wsagents && server.wsagents[nodeid]);
     }
 
-    async function syncNodeWithState(node, suppliedSysinfo, source, authoritativeUsers, suppliedLastConnectTime, deferDuplicateReconcile, state) {
+    async function syncNodeWithState(node, suppliedSysinfo, source, authoritativeUsers, suppliedLastConnectTime, deferDuplicateReconcile, state, settings) {
             const domain = node.domain;
             const assets = state.assets;
             let sysinfo = suppliedSysinfo;
@@ -322,6 +351,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
             asset.type = 'inventoryasset';
             asset.domain = domain;
             model.applySnapshot(asset, snapshot, now, source || 'system', conflicts);
+            if (settings) model.evaluateReviews(asset, policyForAsset(asset, settings), now);
             await dbSet(asset);
             indexSyncAsset(state, asset);
             if (deferDuplicateReconcile !== true) {
@@ -337,8 +367,8 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         // this MeshCentral process. This prevents two agents with the same
         // serial/UUID from creating duplicate inventory records concurrently.
         return withQueue(`domain:${node.domain}`, async () => {
-            const assets = await dbAll('inventoryasset', node.domain);
-            return syncNodeWithState(node, suppliedSysinfo, source, authoritativeUsers, suppliedLastConnectTime, deferDuplicateReconcile, createSyncState(assets));
+            const [assets, settings] = await Promise.all([dbAll('inventoryasset', node.domain), domainSettings(node.domain)]);
+            return syncNodeWithState(node, suppliedSysinfo, source, authoritativeUsers, suppliedLastConnectTime, deferDuplicateReconcile, createSyncState(assets), settings);
         });
     }
 
@@ -349,11 +379,12 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
             const queuedAt = Date.now();
             if (!force && lastDomainScan.has(domain) && (queuedAt - lastDomainScan.get(domain)) < SCAN_TTL_MS) return;
 
-            const [nodes, sysinfos, lastConnects, assets] = await Promise.all([
+            const [nodes, sysinfos, lastConnects, assets, settings] = await Promise.all([
                 dbAll('node', domain),
                 dbAll('sysinfo', domain),
                 dbAll('lastconnect', domain),
-                dbAll('inventoryasset', domain)
+                dbAll('inventoryasset', domain),
+                domainSettings(domain)
             ]);
             const state = createSyncState(assets);
             const sysinfoByNode = new Map();
@@ -371,7 +402,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
 
             for (const node of nodes) {
                 if (!node || node.deleted === true || !node._id) continue;
-                await syncNodeWithState(node, sysinfoByNode.get(node._id) || null, 'synchronizer', false, lastConnectByNode.get(node._id), true, state);
+                await syncNodeWithState(node, sysinfoByNode.get(node._id) || null, 'synchronizer', false, lastConnectByNode.get(node._id), true, state, settings);
             }
 
             const activeNodeIds = new Set(nodes.filter((node) => node && !node.deleted).map((node) => node._id));
@@ -389,7 +420,10 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                     }
                     continue;
                 }
-                if (isManualWorkstation(asset)) continue;
+                if (isManualWorkstation(asset)) {
+                    if (model.evaluateReviews(asset, null, now)) await dbSet(asset);
+                    continue;
+                }
                 const linked = (asset.nodeids || []).some((nodeid) => activeNodeIds.has(nodeid));
                 if (!linked && asset.automatic && (asset.automatic.online !== false || asset.automatic.nodeExists !== false)) {
                     asset.type = 'inventoryasset';
@@ -405,6 +439,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                     asset.automatic.nodeExists = true;
                     await dbSet(asset);
                 }
+                if (model.evaluateReviews(asset, policyForAsset(asset, settings), now)) await dbSet(asset);
             }
             await reconcileCrossSourceDuplicates(domain, state.assets, 'synchronizer', now);
             lastDomainScan.set(domain, Date.now());
@@ -463,6 +498,8 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
             assetKind: isPeripheral(asset) ? 'peripheral' : 'workstation',
             source: asset.source || (isPeripheral(asset) ? 'manual' : 'automatic'),
             status: asset.status || 'Discovered',
+            recordState: asset.recordState || 'Active',
+            reviews: asset.reviews || [],
             identity: asset.identity || {},
             automatic: asset.automatic || {},
             manualHardware: asset.manualHardware || {},
@@ -491,13 +528,15 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
     }
 
     function summary(assets) {
-        const result = { total: assets.length, assigned: 0, available: 0, review: 0, repair: 0, retired: 0 };
+        const result = { total: 0, assigned: 0, available: 0, review: 0, repair: 0, retired: 0, archived: 0 };
         for (const asset of assets) {
+            if (asset.recordState === 'Archived') { result.archived++; continue; }
+            result.total++;
             if (asset.status === 'Assigned') result.assigned++;
             if (asset.status === 'Available' || asset.status === 'Discovered') result.available++;
             if (asset.status === 'In Repair') result.repair++;
             if (asset.status === 'Retired') result.retired++;
-            if ((asset.assignment.pending || []).length > 0 || (asset.identityConflicts || []).length > 0 || (asset.duplicateConflicts || []).length > 0) result.review++;
+            if ((asset.assignment.pending || []).length > 0 || (asset.identityConflicts || []).length > 0 || (asset.duplicateConflicts || []).length > 0 || (asset.reviews || []).some((item) => !item.snoozedUntil || Date.parse(`${item.snoozedUntil}T23:59:59Z`) < Date.now())) result.review++;
         }
         return result;
     }
@@ -629,6 +668,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
 
     function applyManualWorkstation(asset, value, actor, now) {
         const previousStatus = asset.status;
+        const previousAssignee = asset.assignment && asset.assignment.assignees && asset.assignment.assignees[0] && asset.assignment.assignees[0].id;
         asset.name = value.name;
         asset.status = value.status;
         asset.identity = { serial: value.serial, uuid: value.uuid };
@@ -644,7 +684,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
             purchaseDate: value.purchaseDate,
             warrantyEnd: value.warrantyEnd
         };
-        const assignees = value.assignedUser ? [{ id: value.assignedUser.toLowerCase(), display: value.assignedUser, assignedAt: now }] : [];
+        const assignees = value.assignedUser ? [{ id: value.assignedUser.toLowerCase(), display: value.assignedUser, assignedAt: now, source: 'manual' }] : [];
         asset.assignment = asset.assignment || {};
         asset.assignment.mode = assignees.length ? 'single' : 'unassigned';
         asset.assignment.assignees = assignees;
@@ -652,7 +692,10 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         asset.assignment.ignored = [];
         asset.assignment.resolutions = [];
         asset.assignment.initialized = true;
+        model.evaluateReviews(asset, null, now);
         asset.updatedAt = now;
+        if (assignees.length && assignees[0].id !== previousAssignee) model.addHistory(asset, 'assignment.manual', actor, `Assigned to ${assignees[0].display} (manual)`, now);
+        if (!assignees.length && previousAssignee) model.addHistory(asset, 'assignment.cleared', actor, 'Cleared manual assignment', now);
         if (previousStatus !== asset.status) {
             model.addHistory(asset, 'lifecycle.changed', actor, `${previousStatus} → ${asset.status}`, now);
         } else {
@@ -708,8 +751,10 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
             const assets = (await dbAll('inventoryasset', domain)).filter((asset) => visibleToUser(asset, session.user, accessibleMeshIds));
             assets.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
             const output = assets.map((asset) => publicAsset(asset, false, session.user));
+            const settings = isFullAdmin(session.user) ? await domainSettings(domain) : null;
             return {
                 kind: 'list', assets: output, summary: summary(output), permissions: check('_ALL_'),
+                settings, settingsWarning: settingsWarning(domain, settings),
                 peripheralTypes: model.PERIPHERAL_TYPES,
                 capabilities: { canCreateManualWorkstation: isFullAdmin(session.user) }
             };
@@ -718,6 +763,20 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         if (action === 'get') {
             const asset = await requireAsset(command, session, 'can_view');
             return { kind: 'asset', asset: publicAsset(asset, true, session.user) };
+        }
+
+        if (action === 'settings-update') {
+            if (!isFullAdmin(session.user)) throw new Error('Only a full administrator can change inventory settings.');
+            const check = await permissions(session.user, {});
+            if (!check('can_manage')) throw new Error('Permission denied.');
+            const supplied = command.settings && typeof command.settings === 'object' ? command.settings : {};
+            const mode = model.text(supplied.mode, 32);
+            if (!['meshcentral', 'custom', 'disabled'].includes(mode)) throw new Error('Invalid stale detection mode.');
+            const days = Number(supplied.days);
+            if (!Number.isSafeInteger(days) || days < 1 || !Number.isSafeInteger(days * 86400000)) throw new Error('Stale threshold must be a positive whole number of days.');
+            await withQueue(`domain:${domain}`, () => dbSet({ _id: `inventorysettings/${domain}`, type: 'inventorysettings', domain, mode, days, updatedBy: session.user._id, updatedAt: Date.now() }));
+            await scanDomain(domain, true);
+            return { kind: 'settings', settings: { mode, days }, settingsWarning: settingsWarning(domain, { mode, days }) };
         }
 
         if (action === 'workstation-create') {
@@ -795,7 +854,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                         purchaseDate: value.purchaseDate, warrantyEnd: value.warrantyEnd
                     };
                     asset.assignment = asset.assignment || {};
-                    asset.assignment.assignees = value.assignedUser ? [{ id: value.assignedUser.toLowerCase(), display: value.assignedUser, assignedAt: Date.now() }] : [];
+                    asset.assignment.assignees = value.assignedUser ? [{ id: value.assignedUser.toLowerCase(), display: value.assignedUser, assignedAt: Date.now(), source: 'manual' }] : [];
                     asset.assignment.mode = value.assignedUser ? 'single' : 'unassigned';
                     asset.assignment.initialized = true;
                     asset.assignment.pending = [];
@@ -833,6 +892,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                 }
                 if (changes.status !== undefined) {
                     if (!model.LIFECYCLE_STATES.includes(changes.status)) throw new Error('Invalid lifecycle state.');
+                    if (changes.status === 'Assigned' && !(asset.assignment && Array.isArray(asset.assignment.assignees) && asset.assignment.assignees.length > 0)) throw new Error('Assigned requires an assignee.');
                     asset.status = changes.status;
                 }
                 if (!asset.manual) asset.manual = {};
@@ -865,6 +925,18 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                 const requestedUser = command.user && typeof command.user === 'object' ? command.user : {};
                 model.assignmentAction(asset, model.text(command.assignmentAction, 32), requestedUser, session.user._id, Date.now());
                 asset.type = 'inventoryasset';
+                await dbSet(asset);
+                return { kind: 'asset', asset: publicAsset(asset, true, session.user) };
+            });
+        }
+
+        if (action === 'review') {
+            return withQueue(`domain:${domain}`, async () => {
+                const asset = await requireAsset(command, session, 'can_manage');
+                if (isPeripheral(asset)) throw new Error('Review action requires a workstation.');
+                const reviewAction = model.text(command.reviewAction, 32);
+                if (reviewAction === 'restore' && !isFullAdmin(session.user)) throw new Error('Only a full administrator can restore an archived record.');
+                model.reviewAction(asset, reviewAction, model.text(command.reason, 64), command.until, session.user._id, Date.now());
                 await dbSet(asset);
                 return { kind: 'asset', asset: publicAsset(asset, true, session.user) };
             });
@@ -976,12 +1048,19 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         // a manual/staging install receives the same permission definitions.
         registerPermissions();
         const timer = setTimeout(() => {
+            if (pluginHandler.plugins && pluginHandler.plugins.inventory !== plugin) return;
             const domains = root.config && root.config.domains ? Object.keys(root.config.domains) : [''];
             for (const domain of domains) {
                 scanDomain(domain, true).catch((error) => log(`Initial scan failed for domain "${domain}"`, error));
             }
         }, 3000);
         if (timer.unref) timer.unref();
+        const reviewTimer = setInterval(() => {
+            if (pluginHandler.plugins && pluginHandler.plugins.inventory !== plugin) { clearInterval(reviewTimer); return; }
+            const domains = root.config && root.config.domains ? Object.keys(root.config.domains) : [''];
+            for (const domain of domains) scanDomain(domain, true).catch((error) => log(`Scheduled scan failed for domain "${domain}"`, error));
+        }, 6 * 60 * 60 * 1000);
+        if (reviewTimer.unref) reviewTimer.unref();
     };
 
     plugin.enforceModernUI = function enforceModernUI() {

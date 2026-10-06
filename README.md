@@ -46,6 +46,10 @@ Full administrators can configure plugin permissions from **My Server → Plugin
 
 - Agent-backed workstations are created from MeshCentral node and system-information records.
 - The first valid signed-in user becomes the assignee. Later users require administrator review.
+- Managers can assign a user manually to any workstation. Agent reports with no user keep that assignee; a different reported user appears for review.
+- Stale and missing agents raise review without changing the workstation lifecycle. The stale threshold follows MeshCentral's device-group or domain removal setting by default, one day earlier than removal. When removal is disabled, the default is 30 days.
+- Full administrators can set a custom stale threshold or disable stale detection from **Stale policy**. Missing nodes still raise review. Trusted startup, scheduled, and manual synchronization evaluate these conditions; opening the inventory list does not.
+- Archived workstations appear under **Archived records** and are excluded from active counts. Returning archived agents require administrator restoration.
 - Removed MeshCentral nodes remain as retained inventory records until manually deleted.
 - Manual workstations remain separate from agent-backed workstations. Duplicate serial numbers, UUIDs, and asset tags are blocked or flagged for review.
 - Unscoped manual workstations and peripherals are visible only to full administrators.

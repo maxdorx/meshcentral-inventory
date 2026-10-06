@@ -165,6 +165,7 @@
             <div class="inv-actions">
                 <button class="inv-button" id="exportButton" type="button">Export CSV</button>
                 <button class="inv-button primary" id="rescanButton" type="button">Synchronize</button>
+                <button class="inv-button" id="settingsButton" type="button">Stale policy</button>
                 <button class="inv-button primary" id="addWorkstationButton" type="button">Add workstation</button>
                 <button class="inv-button" id="templateButton" type="button">Download CSV template</button>
                 <button class="inv-button" id="importButton" type="button">Import CSV</button>
@@ -172,6 +173,17 @@
                 <input id="importFileInput" class="inv-hidden" type="file" accept=".csv,text/csv">
             </div>
         </header>
+
+        <section class="inv-section inv-hidden" id="settingsPanel">
+            <h2>Stale device policy</h2>
+            <div class="inv-form-grid">
+                <div class="inv-field"><label for="staleMode">Detection</label><select class="inv-select" id="staleMode"><option value="meshcentral">Follow MeshCentral removal settings</option><option value="custom">Custom threshold</option><option value="disabled">Disable stale detection</option></select></div>
+                <div class="inv-field"><label for="staleDays">Custom threshold, days</label><input class="inv-input" id="staleDays" type="number" min="1" step="1" value="30"></div>
+            </div>
+            <p class="inv-muted">When MeshCentral auto-removal is off, the default threshold is 30 days. Missing nodes still require review.</p>
+            <p class="inv-review" id="settingsWarning"></p>
+            <button class="inv-button primary" id="saveSettings" type="button">Save policy</button>
+        </section>
 
         <div class="inv-grid" id="summaryCards"></div>
 
@@ -192,6 +204,7 @@
                 <option value="stale30">Not seen for 30+ days</option>
                 <option value="stale90">Not seen for 90+ days</option>
             </select>
+            <select class="inv-select" id="recordFilter"><option value="active">Active records</option><option value="archived">Archived records</option></select>
             <span class="inv-toolbar-spacer"></span>
             <select class="inv-select" id="pageSize" aria-label="Rows per page">
                 <option value="10">10 per page</option>
@@ -280,7 +293,9 @@
                 <section class="inv-section">
                     <h2>Assignment</h2>
                     <div id="assignmentSummary"></div>
+                    <div class="inv-field" id="manualAssignment"><label for="manualAssignee">Assign user manually</label><div class="inv-user-actions"><input class="inv-input" id="manualAssignee" maxlength="256" placeholder="Username or email"><button class="inv-button small" id="assignManualButton" type="button">Assign</button></div></div>
                     <div id="assignmentReview"></div>
+                    <div id="conditionReview"></div>
                 </section>
 
                 <section class="inv-section">
@@ -372,7 +387,7 @@
         assets: [], selected: null, permissions: boot.permissions || [], loading: false,
         cardFilter: '', pendingListRequestId: '', pendingRequests: {}, requestedAssetId: '', activeTab: 'workstations',
         peripheralTypes: boot.peripheralTypes || ['Mouse', 'Keyboard', 'Headset', 'Monitor', 'Other'], capabilities: {},
-        importRows: [], importPreview: [], keepAddAnother: false, page: 1, pageSize: 25
+        importRows: [], importPreview: [], keepAddAnother: false, page: 1, pageSize: 25, settings: null
     };
     var requestCounter = 0;
     var frameRequestPrefix = (boot.mode === 'device' ? 'device' : 'dashboard') + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
@@ -403,10 +418,13 @@
     function isPeripheral(asset) { return asset && asset.assetKind === 'peripheral'; }
     function isManualWorkstation(asset) { return asset && !isPeripheral(asset) && asset.source === 'manual'; }
     function assetsForTab() {
-        return state.assets.filter(function (asset) { return state.activeTab === 'peripherals' ? isPeripheral(asset) : !isPeripheral(asset); });
+        var archived = byId('recordFilter').value === 'archived';
+        return state.assets.filter(function (asset) {
+            return (state.activeTab === 'peripherals' ? isPeripheral(asset) : !isPeripheral(asset)) && ((asset.recordState === 'Archived') === archived);
+        });
     }
     function workstationAssets() {
-        return state.assets.filter(function (asset) { return !isPeripheral(asset); }).sort(function (a, b) {
+        return state.assets.filter(function (asset) { return !isPeripheral(asset) && asset.recordState !== 'Archived'; }).sort(function (a, b) {
             return value(a.name).localeCompare(value(b.name));
         });
     }
@@ -524,7 +542,9 @@
     }
 
     function setActiveTab(tab, updateUrl) {
-        state.activeTab = tab === 'peripherals' ? 'peripherals' : 'workstations';
+        var nextTab = tab === 'peripherals' ? 'peripherals' : 'workstations';
+        if (state.activeTab !== nextTab) byId('recordFilter').value = 'active';
+        state.activeTab = nextTab;
         state.cardFilter = '';
         state.page = 1;
         byId('workstationsTab').classList.toggle('active', state.activeTab === 'workstations');
@@ -533,6 +553,8 @@
         byId('sectionTitle').textContent = peripherals ? 'Peripherals' : 'Workstations';
         byId('sectionSubtitle').textContent = peripherals ? 'Manual inventory for monitors, mice, keyboards, headsets, and other peripherals' : 'Automatic agent inventory and separate manual workstation records';
         byId('rescanButton').classList.toggle('inv-hidden', peripherals || !can('can_sync'));
+        byId('settingsButton').classList.toggle('inv-hidden', peripherals || !state.capabilities.canCreateManualWorkstation || !can('can_manage'));
+        if (peripherals) byId('settingsPanel').classList.add('inv-hidden');
         byId('addWorkstationButton').classList.toggle('inv-hidden', peripherals || !can('can_manage') || !state.capabilities.canCreateManualWorkstation);
         byId('templateButton').classList.toggle('inv-hidden', !peripherals || !can('can_manage'));
         byId('importButton').classList.toggle('inv-hidden', !peripherals || !can('can_manage'));
@@ -632,7 +654,7 @@
     }
 
     function needsReview(asset) {
-        return ((asset.assignment && asset.assignment.pending) || []).length > 0 || (asset.identityConflicts || []).length > 0 || (asset.duplicateConflicts || []).length > 0;
+        return ((asset.assignment && asset.assignment.pending) || []).length > 0 || (asset.identityConflicts || []).length > 0 || (asset.duplicateConflicts || []).length > 0 || (asset.reviews || []).some(function (item) { return !item.snoozedUntil || Date.parse(item.snoozedUntil + 'T23:59:59Z') < Date.now(); });
     }
 
     function summarizeAssets(assets) {
@@ -780,6 +802,7 @@
             deviceCell.className = 'inv-device-cell';
             deviceCell.appendChild(node('div', 'inv-device', asset.name || 'Unnamed device'));
             deviceCell.appendChild(node('div', 'inv-muted', isManualWorkstation(asset) ? 'Manual · No agent' : (asset.meshName || 'No device group')));
+            if (asset.recordState === 'Archived') deviceCell.appendChild(node('div', 'inv-muted', 'Archived'));
             row.appendChild(deviceCell);
 
             var statusCell = document.createElement('td');
@@ -791,7 +814,8 @@
             var workstationHardware = isManualWorkstation(asset) ? (asset.manualHardware || {}) : (asset.automatic || {});
             row.appendChild(node('td', '', [value(workstationHardware.manufacturer), value(workstationHardware.model)].filter(Boolean).join(' ') || '—'));
             row.appendChild(node('td', '', value(asset.manual && asset.manual.location, '—')));
-            row.appendChild(node('td', isManualWorkstation(asset) ? 'inv-muted' : (asset.automatic && asset.automatic.online ? 'inv-online' : 'inv-offline'), isManualWorkstation(asset) ? 'No agent' : (asset.automatic && asset.automatic.online ? 'Online' : 'Offline')));
+            var agentCondition = isManualWorkstation(asset) ? 'No agent' : value(asset.automatic && asset.automatic.condition, asset.automatic && asset.automatic.nodeExists === false ? 'Node missing' : (asset.automatic && asset.automatic.online ? 'Online' : 'Offline'));
+            row.appendChild(node('td', agentCondition === 'Online' ? 'inv-online' : 'inv-offline', agentCondition));
             row.appendChild(node('td', needsReview(asset) ? 'inv-review' : 'inv-muted', needsReview(asset) ? 'Review required' : 'Clear'));
             body.appendChild(row);
         });
@@ -808,14 +832,17 @@
         var review = byId('assignmentReview');
         clear(summary);
         clear(review);
+        byId('manualAssignment').classList.toggle('inv-hidden', isPeripheral(asset) || !can('can_manage'));
+        byId('manualAssignee').value = '';
 
         var modeLine = node('div', 'inv-muted', 'Mode: ' + value(assignment.mode, 'unassigned'));
         summary.appendChild(modeLine);
+        summary.appendChild(node('div', 'inv-muted', 'Record: ' + value(asset.recordState, 'Active')));
         if ((assignment.assignees || []).length === 0) {
             summary.appendChild(node('div', '', 'No assigned user'));
         } else {
             (assignment.assignees || []).forEach(function (user) {
-                summary.appendChild(node('div', 'inv-user', user.display || user.id));
+                summary.appendChild(node('div', 'inv-user', (user.display || user.id) + ' · ' + value(user.source, asset.source === 'manual' ? 'manual' : 'agent')));
             });
         }
 
@@ -879,6 +906,57 @@
             var source = conflict.otherSource === 'manual' ? 'manual' : 'automatic';
             review.appendChild(node('div', 'inv-review', 'Possible duplicate ' + source + ' workstation: ' + value(conflict.otherName, conflict.otherAssetId) + (matches ? ' (matching ' + matches + ')' : '')));
         });
+        renderConditionReviews(asset);
+    }
+
+    function reviewAction(action, reason, until) {
+        if (!state.selected) return;
+        send('review', { assetId: state.selected.id, reviewAction: action, reason: reason || '', until: until || '' });
+    }
+
+    function renderConditionReviews(asset) {
+        var container = byId('conditionReview');
+        clear(container);
+        (asset.reviews || []).forEach(function (item) {
+            var line = node('div', 'inv-user');
+            var messages = {
+                'stale-device': 'Agent has been offline beyond the stale threshold.',
+                'node-missing': 'MeshCentral node is missing. The inventory record is retained.',
+                'assignment-missing': 'Lifecycle is Assigned, but no user is assigned.',
+                'archived-returned': 'An archived agent has returned. Restore this record after review.'
+            };
+            var label = messages[item.reason] || item.reason;
+            if (item.snoozedUntil && Date.parse(item.snoozedUntil + 'T23:59:59Z') > Date.now()) label += ' Snoozed until ' + item.snoozedUntil + '.';
+            line.appendChild(node('div', 'inv-review', label));
+            if (can('can_manage')) {
+                var actions = node('div', 'inv-user-actions');
+                function addAction(title, action) {
+                    var button = node('button', 'inv-button small', title);
+                    button.type = 'button';
+                    button.addEventListener('click', action);
+                    actions.appendChild(button);
+                }
+                if (item.reason === 'assignment-missing') addAction('Assign user', function () { byId('manualAssignee').focus(); });
+                if (item.reason === 'stale-device' || item.reason === 'node-missing') {
+                    addAction('Keep active', function () { reviewAction('acknowledge', item.reason); });
+                    addAction('Snooze', function () {
+                        var date = window.prompt('Snooze until date (YYYY-MM-DD):');
+                        if (date) reviewAction('snooze', item.reason, date);
+                    });
+                    addAction('Archive', function () { reviewAction('archive', item.reason); });
+                    addAction('Retire', function () { reviewAction('retire', item.reason); });
+                }
+                if (item.reason === 'archived-returned' && state.capabilities.canCreateManualWorkstation) addAction('Restore', function () { reviewAction('restore', item.reason); });
+                line.appendChild(actions);
+            }
+            container.appendChild(line);
+        });
+        if (asset.recordState === 'Archived' && can('can_manage') && state.capabilities.canCreateManualWorkstation && !(asset.reviews || []).some(function (item) { return item.reason === 'archived-returned'; })) {
+            var restore = node('button', 'inv-button small', 'Restore archived record');
+            restore.type = 'button';
+            restore.addEventListener('click', function () { reviewAction('restore', ''); });
+            container.appendChild(restore);
+        }
     }
 
     function renderHistory(asset) {
@@ -988,6 +1066,7 @@
             addField(hardware, 'Memory', formatBytes(asset.automatic.memoryBytes));
             addField(hardware, 'Storage devices', (asset.automatic.storage || []).length);
             addField(hardware, 'Last seen', formatDate(asset.automatic.lastSeen));
+            addField(hardware, 'Agent condition', value(asset.automatic.condition, asset.automatic.online ? 'Online' : 'Offline'));
             addField(hardware, 'MeshCentral node', asset.nodeid, 'inv-mono');
         }
 
@@ -1105,15 +1184,16 @@
             downloadCsv('meshcentral-peripherals-' + new Date().toISOString().substring(0, 10) + '.csv', rows);
             return;
         }
-        rows = [['Device', 'Group', 'Status', 'Assignment mode', 'Assignees', 'Serial', 'UUID', 'Manufacturer', 'Model', 'Asset tag', 'Location', 'Operating system', 'Online', 'Last seen']];
+        rows = [['Device', 'Group', 'Lifecycle', 'Record state', 'Agent condition', 'Assignment mode', 'Assignees', 'Assignment sources', 'Serial', 'UUID', 'Manufacturer', 'Model', 'Asset tag', 'Location', 'Operating system', 'Last seen']];
         filteredAssets().forEach(function (asset) {
             var hardware = isManualWorkstation(asset) ? (asset.manualHardware || {}) : (asset.automatic || {});
             rows.push([
-                asset.name, asset.meshName, asset.status, asset.assignment.mode,
+                asset.name, asset.meshName, asset.status, asset.recordState || 'Active', isManualWorkstation(asset) ? 'No agent' : asset.automatic.condition, asset.assignment.mode,
                 (asset.assignment.assignees || []).map(function (item) { return item.display || item.id; }).join('; '),
+                (asset.assignment.assignees || []).map(function (item) { return item.source || (isManualWorkstation(asset) ? 'manual' : 'agent'); }).join('; '),
                 asset.identity.serial, asset.identity.uuid, hardware.manufacturer, hardware.model,
                 asset.manual.assetTag, asset.manual.location, hardware.osName,
-                isManualWorkstation(asset) ? 'No agent' : (asset.automatic.online ? 'Yes' : 'No'), asset.automatic.lastSeen ? new Date(asset.automatic.lastSeen).toISOString() : ''
+                asset.automatic.lastSeen ? new Date(asset.automatic.lastSeen).toISOString() : ''
             ]);
         });
         downloadCsv('meshcentral-workstations-' + new Date().toISOString().substring(0, 10) + '.csv', rows);
@@ -1301,6 +1381,12 @@
             state.permissions = result.permissions || state.permissions;
             state.peripheralTypes = result.peripheralTypes || state.peripheralTypes;
             state.capabilities = result.capabilities || state.capabilities;
+            state.settings = result.settings || state.settings;
+            if (state.settings) {
+                byId('staleMode').value = state.settings.mode || 'meshcentral';
+                byId('staleDays').value = state.settings.days || 30;
+            }
+            byId('settingsWarning').textContent = result.settingsWarning || '';
             setActiveTab(state.activeTab, false);
             if (boot.nodeid) {
                 var matching = state.assets.find(function (asset) { return asset.nodeid === boot.nodeid || (asset.nodeids || []).indexOf(boot.nodeid) >= 0; });
@@ -1362,6 +1448,11 @@
         } else if (result.kind === 'rescan') {
             showToast('Inventory synchronization completed.');
             send('list', {});
+        } else if (result.kind === 'settings') {
+            state.settings = result.settings;
+            byId('settingsWarning').textContent = result.settingsWarning || '';
+            showToast('Stale device policy saved.');
+            send('list', {});
         }
         return true;
     }
@@ -1397,6 +1488,7 @@
         byId('typeFilter').addEventListener('change', function () { state.page = 1; renderRows(); });
         byId('reviewFilter').addEventListener('change', function () { state.page = 1; state.cardFilter = ''; renderSummary(); renderRows(); });
         byId('presenceFilter').addEventListener('change', function () { state.page = 1; renderRows(); });
+        byId('recordFilter').addEventListener('change', function () { state.page = 1; state.cardFilter = ''; renderSummary(); renderRows(); });
         byId('pageSize').addEventListener('change', function () { state.pageSize = Number(this.value) || 25; state.page = 1; renderRows(); });
         byId('previousPage').addEventListener('click', function () { if (state.page > 1) { state.page--; renderRows(); } });
         byId('nextPage').addEventListener('click', function () { var pages = Math.max(1, Math.ceil(filteredAssets().length / state.pageSize)); if (state.page < pages) { state.page++; renderRows(); } });
@@ -1405,6 +1497,13 @@
         byId('deleteButton').addEventListener('click', deleteAsset);
         byId('exportButton').addEventListener('click', exportCsv);
         byId('rescanButton').addEventListener('click', function () { send('rescan', {}); });
+        byId('settingsButton').addEventListener('click', function () { byId('settingsPanel').classList.toggle('inv-hidden'); });
+        byId('saveSettings').addEventListener('click', function () { send('settings-update', { settings: { mode: byId('staleMode').value, days: Number(byId('staleDays').value) } }); });
+        byId('assignManualButton').addEventListener('click', function () {
+            var user = byId('manualAssignee').value.trim();
+            if (!user) { showToast('Enter a username or email.', true); return; }
+            assignmentAction('manual-replace', { id: user, display: user });
+        });
         byId('addWorkstationButton').addEventListener('click', openWorkstationModal);
         byId('closeWorkstationModal').addEventListener('click', closeWorkstationModal);
         byId('cancelWorkstation').addEventListener('click', closeWorkstationModal);

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0 - 2026-10-06
+
+- Added manual user assignment to every workstation, including agent-backed Macs that report no signed-in user. Manual assignments retain their source and generate an audit event.
+- Added one-time reviews for Assigned workstations with no assignee, stale agents, missing MeshCentral nodes, and archived agents that return.
+- Added configurable stale detection. It follows device-group or domain removal settings by default and uses 30 days when auto-removal is disabled; administrators can choose a custom threshold or disable stale detection.
+- Added review actions to acknowledge an offline cycle, snooze, archive, retire, and restore archived records. Archived records have a separate view and do not count as active.
+- Kept list requests read-only and confined stale evaluation to trusted synchronization and scheduled scans.
+
 ## 1.0.1 - 2026-10-05
 
 - Scoped manual inventory visibility to full administrators or the linked workstation's accessible device group.

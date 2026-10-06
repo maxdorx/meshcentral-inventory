@@ -582,7 +582,7 @@ test('a scoped manager cannot link a peripheral to a workstation outside their d
 test('manual workstation creation is restricted to full administrators', async () => {
     let writes = 0;
     const database = {
-        Get() {}, Remove() {},
+        Get(id, callback) { callback(null, []); }, Remove() {},
         GetAllTypeNoTypeField(type, domain, callback) { callback(null, []); },
         Set(document, callback) { writes++; callback(null); }
     };
@@ -641,7 +641,7 @@ test('full synchronization loads the inventory collection once for all nodes', a
     let inventoryReads = 0;
     const saved = [];
     const database = {
-        Get() {}, Remove() {},
+        Get(id, callback) { callback(null, []); }, Remove() {},
         GetAllTypeNoTypeField(type, domain, callback) {
             if (type === 'node') return callback(null, nodes);
             if (type === 'sysinfo') return callback(null, sysinfos);
@@ -716,6 +716,74 @@ test('automatic workstation updates reject invalid dates without writing', async
     assert.match(response.error, /Purchase date must be/);
     assert.equal(writes, 0);
     assert.equal(asset.manual.purchaseDate, '');
+    const assignedResponse = await new Promise((resolve) => {
+        session.response = resolve;
+        plugin.serveraction({
+            requestId: 'invalid-assignment', pluginaction: 'update', assetId: asset._id,
+            changes: { status: 'Assigned' }
+        }, session);
+    });
+    assert.equal(assignedResponse.ok, false);
+    assert.match(assignedResponse.error, /requires an assignee/);
+    assert.equal(writes, 0);
+});
+
+test('device-group removal policy drives stale review and settings remain admin-only', async () => {
+    const now = Date.now();
+    const node = { _id: 'node//policy', type: 'node', domain: '', meshid: 'mesh//policy', name: 'POLICY-PC', agent: { id: 4 } };
+    const asset = {
+        _id: 'inventoryasset//policy', type: 'inventoryasset', domain: '', assetKind: 'workstation', source: 'automatic',
+        nodeid: node._id, nodeids: [node._id], meshid: node.meshid, name: node.name, status: 'Available',
+        identity: { serial: 'POLICY-SERIAL', uuid: '' }, automatic: { lastSeen: now - 11 * 86400000, nodeExists: true, online: false },
+        manual: {}, assignment: { mode: 'unassigned', assignees: [], pending: [], initialized: true }, history: []
+    };
+    const records = new Map([[asset._id, asset]]);
+    let writes = 0;
+    const database = {
+        Get(id, callback) { callback(null, records.has(id) ? [records.get(id)] : []); },
+        GetAllTypeNoTypeField(type, domain, callback) {
+            if (type === 'node') return callback(null, [node]);
+            if (type === 'sysinfo') return callback(null, [{ _id: `si${node._id}`, type: 'sysinfo', domain: '', hardware: { identifiers: { chassis_serial: 'POLICY-SERIAL' } } }]);
+            if (type === 'lastconnect') return callback(null, [{ _id: `lc${node._id}`, type: 'lastconnect', domain: '', meshid: node.meshid, time: now - 11 * 86400000 }]);
+            callback(null, type === 'inventoryasset' ? [records.get(asset._id)] : []);
+        },
+        Set(document, callback) { writes++; records.set(document._id, JSON.parse(JSON.stringify(document))); callback(null); },
+        Remove() {}
+    };
+    const pluginHandler = {
+        parent: {
+            db: database,
+            webserver: { meshes: { [node.meshid]: { _id: node.meshid, domain: '', name: 'Policy group', expireDevs: 10 } }, wsagents: {} },
+            config: { domains: { '': { autoremoveinactivedevices: 40 } } }
+        },
+        registerPermissions() {},
+        getAccessPermissions() { return Promise.resolve(() => true); }
+    };
+    const plugin = require('../inventory').inventory(pluginHandler);
+    const session = {
+        domain: { id: '' }, user: { _id: 'user//admin', domain: '', siteadmin: 0xFFFFFFFF },
+        ws: { send(message) { session.response(JSON.parse(message)); } }
+    };
+    const invoke = (pluginaction, extra) => new Promise((resolve) => {
+        session.response = resolve;
+        plugin.serveraction(Object.assign({ requestId: pluginaction, pluginaction }, extra || {}), session);
+    });
+    let response = await invoke('rescan');
+    assert.equal(response.ok, true);
+    assert.deepEqual(records.get(asset._id).reviews.map((item) => item.reason), ['stale-device']);
+    const beforeList = writes;
+    response = await invoke('list');
+    assert.equal(response.ok, true);
+    assert.equal(writes, beforeList);
+    response = await invoke('settings-update', { settings: { mode: 'custom', days: 12 } });
+    assert.equal(response.ok, true);
+    assert.match(response.result.settingsWarning, /may disappear/);
+    assert.equal(records.get('inventorysettings/').days, 12);
+    assert.deepEqual(records.get(asset._id).reviews, []);
+    session.user = { _id: 'user//scoped', domain: '', siteadmin: 0 };
+    response = await invoke('settings-update', { settings: { mode: 'disabled', days: 30 } });
+    assert.equal(response.ok, false);
+    assert.match(response.error, /full administrator/);
 });
 
 test('browser application script is valid JavaScript after boot data is rendered', () => {
