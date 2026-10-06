@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.1 - 2026-10-06
+
+- Expanded the Inventory dashboard and detail views to use the full remaining MeshCentral viewport and full iframe width.
+- Replaced nested document scrolling with one intentional asset-list scrollbar and one detail-view scrollbar.
+- Extended the toolbar and inventory table to the viewport edges while retaining responsive gutters across Modern themes.
+- Restored MeshCentral's original shared plugin-frame sizing whenever Inventory is closed or another plugin takes ownership.
+
 ## 1.1.0 - 2026-10-06
 
 - Added manual user assignment to every workstation, including agent-backed Macs that report no signed-in user. Manual assignments retain their source and generate an audit event.

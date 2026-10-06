@@ -1188,6 +1188,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
 
     plugin.goPageStart = function goPageStart(page) {
         if (page !== 43) {
+            pluginHandler.inventory.fitInventoryFrame(false);
             pluginHandler.inventory.setInventoryUrlMarker(false);
             pluginHandler.inventory.setInventoryHeading(false);
             pluginHandler.inventory.setInventorySelected(false);
@@ -1301,6 +1302,10 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         var frame = document.getElementById('p43iframe');
         if (!frame || frame.getAttribute('data-inventory-frame-watch') === '1') return;
         frame.setAttribute('data-inventory-frame-watch', '1');
+        window.addEventListener('resize', function () {
+            var source = frame.getAttribute('src') || '';
+            if (source.indexOf('pin=inventory') >= 0) pluginHandler.inventory.fitInventoryFrame(true);
+        });
         try {
             new MutationObserver(function () {
                 var source = frame.getAttribute('src') || '';
@@ -1308,12 +1313,37 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                 // takes ownership of it, remove Inventory's route and visual
                 // selection so a later refresh cannot restore the wrong one.
                 if (source && source.indexOf('pin=inventory') < 0) {
+                    pluginHandler.inventory.fitInventoryFrame(false);
                     pluginHandler.inventory.setInventoryUrlMarker(false, true);
                     pluginHandler.inventory.setInventoryHeading(false);
                     pluginHandler.inventory.setInventorySelected(false);
+                } else if (source.indexOf('pin=inventory') >= 0) {
+                    window.setTimeout(function () { pluginHandler.inventory.fitInventoryFrame(true); }, 0);
                 }
             }).observe(frame, { attributes: true, attributeFilter: ['src'] });
         } catch (error) { /* Older browsers can operate without the watcher. */ }
+    };
+
+    plugin.fitInventoryFrame = function fitInventoryFrame(enabled) {
+        var frame = document.getElementById('p43iframe');
+        if (!frame) return;
+        if (enabled === true) {
+            if (!frame.hasAttribute('data-inventory-original-height')) {
+                frame.setAttribute('data-inventory-original-height', frame.style.height || '');
+                frame.setAttribute('data-inventory-original-max-height', frame.style.maxHeight || '');
+            }
+            var top = frame.getBoundingClientRect().top;
+            var available = Math.max(240, Math.floor(window.innerHeight - Math.max(0, top)));
+            frame.style.height = available + 'px';
+            frame.style.maxHeight = available + 'px';
+            return;
+        }
+        if (frame.hasAttribute('data-inventory-original-height')) {
+            frame.style.height = frame.getAttribute('data-inventory-original-height');
+            frame.style.maxHeight = frame.getAttribute('data-inventory-original-max-height');
+            frame.removeAttribute('data-inventory-original-height');
+            frame.removeAttribute('data-inventory-original-max-height');
+        }
     };
 
     plugin.openInventory = function openInventory(preserveDetail) {
@@ -1356,6 +1386,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
             } catch (error) { /* Route restoration is best effort. */ }
         }
         setTimeout(function () {
+            pluginHandler.inventory.fitInventoryFrame(true);
             pluginHandler.inventory.setInventoryHeading(true);
             pluginHandler.inventory.setInventorySelected(true);
         }, 0);
@@ -1407,6 +1438,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         'enforceModernUI',
         'installNavigation',
         'trackPluginFrame',
+        'fitInventoryFrame',
         'setInventoryUrlMarker',
         'setInventoryHeading',
         'setInventorySelected',

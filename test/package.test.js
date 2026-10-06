@@ -849,6 +849,53 @@ test('shared plugin page restores Inventory safely and clears its state for anot
     assert.match(template, /window\.parent\.urlargs\.inventorytab/);
 });
 
+test('Inventory owns the remaining viewport without nested page scrolling', () => {
+    const server = fs.readFileSync(path.join(root, 'inventory.js'), 'utf8');
+    const template = fs.readFileSync(path.join(root, 'views', 'inventory.handlebars'), 'utf8');
+    assert.match(server, /fitInventoryFrame\(true\)/);
+    assert.match(server, /fitInventoryFrame\(false\)/);
+    assert.match(server, /window\.innerHeight - Math\.max\(0, top\)/);
+    assert.match(server, /data-inventory-original-height/);
+    assert.match(template, /html, body \{ height: 100%; min-height: 0; overflow: hidden; \}/);
+    assert.match(template, /\.inv-table-wrap \{[\s\S]*?overflow: auto; overscroll-behavior: contain;/);
+    assert.match(template, /\.inv-detail\.open \{[\s\S]*?height: 100%; overflow: auto;/);
+    assert.doesNotMatch(template, /max-width: 1800px/);
+});
+
+test('Inventory frame fitting fills the viewport and restores the shared plugin frame', () => {
+    const originalWindow = global.window;
+    const originalDocument = global.document;
+    const attributes = new Map();
+    const frame = {
+        style: { height: 'calc(100vh - 245px)', maxHeight: 'calc(100vh - 245px)' },
+        hasAttribute(name) { return attributes.has(name); },
+        setAttribute(name, value) { attributes.set(name, String(value)); },
+        getAttribute(name) { return attributes.has(name) ? attributes.get(name) : null; },
+        removeAttribute(name) { attributes.delete(name); },
+        getBoundingClientRect() { return { top: 300 }; }
+    };
+    try {
+        global.window = { innerHeight: 900 };
+        global.document = { getElementById(id) { return id === 'p43iframe' ? frame : null; } };
+        const pluginHandler = {
+            parent: { db: { Get() {}, Set() {}, Remove() {}, GetAllTypeNoTypeField() {} }, webserver: {}, config: { domains: { '': {} } } },
+            registerPermissions() {}, getAccessPermissions() { return Promise.resolve(() => true); }
+        };
+        const plugin = require('../inventory').inventory(pluginHandler);
+        pluginHandler.inventory = plugin;
+        plugin.fitInventoryFrame(true);
+        assert.equal(frame.style.height, '600px');
+        assert.equal(frame.style.maxHeight, '600px');
+        plugin.fitInventoryFrame(false);
+        assert.equal(frame.style.height, 'calc(100vh - 245px)');
+        assert.equal(frame.style.maxHeight, 'calc(100vh - 245px)');
+        assert.equal(attributes.has('data-inventory-original-height'), false);
+    } finally {
+        global.window = originalWindow;
+        global.document = originalDocument;
+    }
+});
+
 test('plugin package contains no software-inventory collector', () => {
     const server = fs.readFileSync(path.join(root, 'inventory.js'), 'utf8').toLowerCase();
     const model = fs.readFileSync(path.join(root, 'lib', 'model.js'), 'utf8').toLowerCase();
