@@ -34,6 +34,8 @@ Assignment is intentionally a reviewed asset-management decision after the first
 
 A dismissal/replacement acknowledges one continuous presence cycle rather than permanently ignoring the user. Repeated reports remain quiet while that user is still present. An authoritative agent report showing the user absent rearms monitoring; a later return creates one new review. Offline/stale database scans cannot rearm monitoring. These transitions and their timestamps are retained in the audit history.
 
+Full administrators can maintain a domain-wide ignored-account list in Inventory settings. Exact IDs are case-insensitive. Bare usernames match the local name in `DOMAIN\user` and `user@domain` reports; qualified entries match only the full ID. Ignored users are filtered before automatic assignment and review, and newly saved rules clear matching pending observations and agent-derived assignees. Manual assignees remain deliberate inventory decisions. Removing a rule permits the next authoritative agent report to create a new observation.
+
 ## Retention
 
 MeshCentral may remove inactive nodes after the configured retention window. The asset is marked offline/missing but remains in inventory, preserving lifecycle, assignment, financial dates, notes, and history.

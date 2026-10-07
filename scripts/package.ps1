@@ -55,7 +55,14 @@ try {
     $stream.Dispose()
 }
 
-Remove-Item -LiteralPath $stage -Recurse -Force
+$resolvedProject = (Resolve-Path -LiteralPath $project).Path.TrimEnd([char[]]'\/')
+$resolvedDist = (Resolve-Path -LiteralPath $dist).Path.TrimEnd([char[]]'\/')
+$resolvedStage = (Resolve-Path -LiteralPath $stage).Path
+if (-not $resolvedDist.StartsWith($resolvedProject + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
+    -not $resolvedStage.StartsWith($resolvedDist + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Package staging path is outside the project dist directory.'
+}
+Remove-Item -LiteralPath $resolvedStage -Recurse -Force
 Copy-Item -LiteralPath $archive -Destination $latestArchive -Force
 
 Write-Output $archive

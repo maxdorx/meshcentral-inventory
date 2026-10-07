@@ -75,7 +75,9 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
 
     async function domainSettings(domain) {
         const saved = await dbGet(`inventorysettings/${domain}`);
-        return saved && saved.type === 'inventorysettings' ? { mode: saved.mode, days: saved.days } : { mode: 'meshcentral', days: 30 };
+        return saved && saved.type === 'inventorysettings'
+            ? { mode: saved.mode, days: saved.days, ignoredUsers: model.normalizeIgnoredUsers(saved.ignoredUsers || []) }
+            : { mode: 'meshcentral', days: 30, ignoredUsers: [] };
     }
 
     function removalDays(domain, meshid) {
@@ -293,7 +295,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
             let sysinfo = suppliedSysinfo;
             if (sysinfo === undefined) sysinfo = await dbGet(`si${node._id}`);
 
-            const snapshot = model.snapshotFrom(node, sysinfo, meshName(node.meshid), isOnline(node._id), suppliedLastConnectTime);
+            const snapshot = model.snapshotFrom(node, sysinfo, meshName(node.meshid), isOnline(node._id), suppliedLastConnectTime, settings && settings.ignoredUsers);
             if (typeof authoritativeUsers === 'boolean') snapshot.userReportAuthoritative = authoritativeUsers;
             let asset = state.byNodeId.get(node._id) || null;
             let conflicts = [];
@@ -350,7 +352,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
 
             asset.type = 'inventoryasset';
             asset.domain = domain;
-            model.applySnapshot(asset, snapshot, now, source || 'system', conflicts);
+            model.applySnapshot(asset, snapshot, now, source || 'system', conflicts, settings && settings.ignoredUsers);
             if (settings) model.evaluateReviews(asset, policyForAsset(asset, settings), now);
             await dbSet(asset);
             indexSyncAsset(state, asset);
@@ -424,6 +426,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                     if (model.evaluateReviews(asset, null, now)) await dbSet(asset);
                     continue;
                 }
+                if (model.applyIgnoredUsers(asset, settings.ignoredUsers, now)) await dbSet(asset);
                 const linked = (asset.nodeids || []).some((nodeid) => activeNodeIds.has(nodeid));
                 if (!linked && asset.automatic && (asset.automatic.online !== false || asset.automatic.nodeExists !== false)) {
                     asset.type = 'inventoryasset';
@@ -774,9 +777,14 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
             if (!['meshcentral', 'custom', 'disabled'].includes(mode)) throw new Error('Invalid stale detection mode.');
             const days = Number(supplied.days);
             if (!Number.isSafeInteger(days) || days < 1 || !Number.isSafeInteger(days * 86400000)) throw new Error('Stale threshold must be a positive whole number of days.');
-            await withQueue(`domain:${domain}`, () => dbSet({ _id: `inventorysettings/${domain}`, type: 'inventorysettings', domain, mode, days, updatedBy: session.user._id, updatedAt: Date.now() }));
+            const settings = await withQueue(`domain:${domain}`, async () => {
+                const previous = await domainSettings(domain);
+                const ignoredUsers = supplied.ignoredUsers === undefined ? previous.ignoredUsers : model.normalizeIgnoredUsers(supplied.ignoredUsers);
+                await dbSet({ _id: `inventorysettings/${domain}`, type: 'inventorysettings', domain, mode, days, ignoredUsers, updatedBy: session.user._id, updatedAt: Date.now() });
+                return { mode, days, ignoredUsers };
+            });
             await scanDomain(domain, true);
-            return { kind: 'settings', settings: { mode, days }, settingsWarning: settingsWarning(domain, { mode, days }) };
+            return { kind: 'settings', settings, settingsWarning: settingsWarning(domain, settings) };
         }
 
         if (action === 'workstation-create') {
@@ -1230,8 +1238,13 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         if (enabled) {
             if (!heading.hasAttribute('data-inventory-original-heading')) {
                 heading.setAttribute('data-inventory-original-heading', heading.innerHTML);
+                heading.setAttribute('data-inventory-original-style', heading.getAttribute('style') || '');
             }
             heading.textContent = '';
+            heading.style.fontSize = '30px';
+            heading.style.lineHeight = '1.2';
+            heading.style.marginTop = '0';
+            heading.style.marginBottom = '0';
             var inventoryTitle = document.createElement('span');
             inventoryTitle.id = 'p43title';
             inventoryTitle.textContent = 'Inventory';
@@ -1251,6 +1264,10 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         } else if (heading.hasAttribute('data-inventory-original-heading')) {
             heading.innerHTML = heading.getAttribute('data-inventory-original-heading');
             heading.removeAttribute('data-inventory-original-heading');
+            var originalStyle = heading.getAttribute('data-inventory-original-style');
+            if (originalStyle) heading.setAttribute('style', originalStyle);
+            else heading.removeAttribute('style');
+            heading.removeAttribute('data-inventory-original-style');
             if (back && back.hasAttribute('data-inventory-original-mouseup')) {
                 var originalMouseup = back.getAttribute('data-inventory-original-mouseup');
                 var originalKeypress = back.getAttribute('data-inventory-original-keypress');

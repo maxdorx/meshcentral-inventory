@@ -118,7 +118,7 @@ test('agent synchronization accepts nodes in MeshCentral default domain', async 
     const saved = new Promise((resolve) => { finish = resolve; });
     const node = {
         _id: 'node//device-1', domain: '', meshid: 'mesh//group-1', name: 'DAX-LAP-042',
-        osdesc: 'Windows 11', users: ['DAX\\basith'], agent: { id: 4, ver: 125 }
+        osdesc: 'Windows 11', users: ['DAX\\adminadmin', 'DAX\\basith'], agent: { id: 4, ver: 125 }
     };
     const sysinfo = {
         _id: 'sinode//device-1', domain: '', type: 'sysinfo', time: Date.now(),
@@ -128,6 +128,7 @@ test('agent synchronization accepts nodes in MeshCentral default domain', async 
         Get(id, callback) {
             if (id === node._id) return callback(null, [node]);
             if (id === `si${node._id}`) return callback(null, [sysinfo]);
+            if (id === 'inventorysettings/') return callback(null, [{ _id: id, type: 'inventorysettings', mode: 'meshcentral', days: 30, ignoredUsers: ['adminadmin'] }]);
             callback(null, []);
         },
         GetAllTypeNoTypeField(type, domain, callback) {
@@ -159,6 +160,8 @@ test('agent synchronization accepts nodes in MeshCentral default domain', async 
     assert.equal(savedAsset.domain, '');
     assert.equal(savedAsset.type, 'inventoryasset');
     assert.equal(savedAsset.name, 'DAX-LAP-042');
+    assert.deepEqual(savedAsset.assignment.assignees.map((user) => user.id), ['dax\\basith']);
+    assert.deepEqual(savedAsset.assignment.pending, []);
 });
 
 test('synchronization splits a node from a legacy placeholder-serial merge', async () => {
@@ -735,7 +738,7 @@ test('device-group removal policy drives stale review and settings remain admin-
         _id: 'inventoryasset//policy', type: 'inventoryasset', domain: '', assetKind: 'workstation', source: 'automatic',
         nodeid: node._id, nodeids: [node._id], meshid: node.meshid, name: node.name, status: 'Available',
         identity: { serial: 'POLICY-SERIAL', uuid: '' }, automatic: { lastSeen: now - 11 * 86400000, nodeExists: true, online: false },
-        manual: {}, assignment: { mode: 'unassigned', assignees: [], pending: [], initialized: true }, history: []
+        manual: {}, assignment: { mode: 'unassigned', assignees: [], pending: [{ id: 'dax\\adminadmin', display: 'DAX\\adminadmin' }], initialized: true }, history: []
     };
     const records = new Map([[asset._id, asset]]);
     let writes = 0;
@@ -775,11 +778,19 @@ test('device-group removal policy drives stale review and settings remain admin-
     response = await invoke('list');
     assert.equal(response.ok, true);
     assert.equal(writes, beforeList);
-    response = await invoke('settings-update', { settings: { mode: 'custom', days: 12 } });
+    response = await invoke('settings-update', { settings: { mode: 'custom', days: 12, ignoredUsers: ['AdminAdmin'] } });
     assert.equal(response.ok, true);
     assert.match(response.result.settingsWarning, /may disappear/);
     assert.equal(records.get('inventorysettings/').days, 12);
+    assert.deepEqual(records.get('inventorysettings/').ignoredUsers, ['adminadmin']);
+    assert.deepEqual(records.get(asset._id).assignment.pending, []);
     assert.deepEqual(records.get(asset._id).reviews, []);
+    response = await invoke('settings-update', { settings: { mode: 'custom', days: 13 } });
+    assert.equal(response.ok, true);
+    assert.deepEqual(records.get('inventorysettings/').ignoredUsers, ['adminadmin']);
+    response = await invoke('settings-update', { settings: { mode: 'custom', days: 13, ignoredUsers: ['bad,*'] } });
+    assert.equal(response.ok, false);
+    assert.deepEqual(records.get('inventorysettings/').ignoredUsers, ['adminadmin']);
     session.user = { _id: 'user//scoped', domain: '', siteadmin: 0 };
     response = await invoke('settings-update', { settings: { mode: 'disabled', days: 30 } });
     assert.equal(response.ok, false);

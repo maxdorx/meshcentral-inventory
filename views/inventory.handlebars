@@ -51,6 +51,7 @@
         .inv-shell { width: 100%; height: 100%; min-height: 0; }
         .inv-dashboard:not(.hidden) { display: flex; flex-direction: column; height: 100%; min-height: 0; }
         .inv-header { display: flex; gap: 16px; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+        .inv-dashboard-actions { justify-content: flex-end; margin-bottom: 10px; }
         .inv-title { margin: 0; font-size: 26px; font-weight: 650; }
         .inv-subtitle { color: var(--inv-muted); margin-top: 3px; }
         .inv-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -64,7 +65,7 @@
         .inv-button.small { padding: 4px 8px; font-size: 12px; }
         .inv-button:disabled { cursor: not-allowed; opacity: .55; }
         .inv-hidden { display: none !important; }
-        .inv-tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--inv-border); }
+        .inv-tabs { display: flex; gap: 4px; margin-bottom: 8px; border-bottom: 1px solid var(--inv-border); }
         .inv-tab { border: 0; border-bottom: 3px solid transparent; padding: 9px 15px; background: transparent; color: var(--inv-fg, #e8e8e8) !important; cursor: pointer; font-weight: 650; }
         .inv-tab.active { border-bottom-color: var(--inv-accent); color: var(--inv-accent) !important; }
         .inv-grid { display: grid; grid-template-columns: repeat(6, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px; }
@@ -120,6 +121,7 @@
         .inv-detail-grid { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr); gap: 12px; }
         .inv-section { border: 1px solid var(--inv-border); border-radius: 7px; background: var(--inv-surface); padding: 14px; margin-bottom: 12px; }
         .inv-section h2 { font-size: 17px; margin: 0 0 12px; }
+        .inv-section h3 { font-size: 14px; margin: 0 0 8px; }
         .inv-fields { display: grid; grid-template-columns: 150px 1fr; gap: 8px 12px; align-items: start; }
         .inv-fields dt { color: var(--inv-muted); }
         .inv-fields dd { margin: 0; word-break: break-word; }
@@ -172,15 +174,11 @@
             <button class="inv-tab active" id="workstationsTab" type="button">Workstations</button>
             <button class="inv-tab" id="peripheralsTab" type="button">Peripherals</button>
         </nav>
-        <header class="inv-header">
-            <div>
-                <h1 class="inv-title" id="sectionTitle">Workstations</h1>
-                <div class="inv-subtitle" id="sectionSubtitle">Automatic inventory from MeshCentral agent details</div>
-            </div>
+        <header class="inv-header inv-dashboard-actions">
             <div class="inv-actions">
                 <button class="inv-button" id="exportButton" type="button">Export CSV</button>
                 <button class="inv-button primary" id="rescanButton" type="button">Synchronize</button>
-                <button class="inv-button" id="settingsButton" type="button">Stale policy</button>
+                <button class="inv-button" id="settingsButton" type="button">Inventory settings</button>
                 <button class="inv-button primary" id="addWorkstationButton" type="button">Add workstation</button>
                 <button class="inv-button" id="templateButton" type="button">Download CSV template</button>
                 <button class="inv-button" id="importButton" type="button">Import CSV</button>
@@ -190,14 +188,20 @@
         </header>
 
         <section class="inv-section inv-hidden" id="settingsPanel">
-            <h2>Stale device policy</h2>
+            <h2>Inventory settings</h2>
+            <h3>Stale device policy</h3>
             <div class="inv-form-grid">
                 <div class="inv-field"><label for="staleMode">Detection</label><select class="inv-select" id="staleMode"><option value="meshcentral">Follow MeshCentral removal settings</option><option value="custom">Custom threshold</option><option value="disabled">Disable stale detection</option></select></div>
                 <div class="inv-field"><label for="staleDays">Custom threshold, days</label><input class="inv-input" id="staleDays" type="number" min="1" step="1" value="30"></div>
             </div>
             <p class="inv-muted">When MeshCentral auto-removal is off, the default threshold is 30 days. Missing nodes still require review.</p>
+            <div class="inv-field">
+                <label for="ignoredUsers">Ignored sign-in accounts (one per line)</label>
+                <textarea class="inv-textarea" id="ignoredUsers" rows="4" placeholder="adminadmin&#10;Administrator@dax.local"></textarea>
+                <span class="inv-muted">A plain username matches that name in any domain or UPN. A qualified name matches only the exact account. Ignored accounts are excluded from automatic assignment and signed-in user review.</span>
+            </div>
             <p class="inv-review" id="settingsWarning"></p>
-            <button class="inv-button primary" id="saveSettings" type="button">Save policy</button>
+            <button class="inv-button primary" id="saveSettings" type="button">Save settings</button>
         </section>
 
         <div class="inv-grid" id="summaryCards"></div>
@@ -249,8 +253,7 @@
     <section class="inv-detail" id="detail">
         <header class="inv-header">
             <div>
-                <button class="inv-button small" id="backButton" type="button">← Inventory</button>
-                <h1 class="inv-title" id="detailTitle" style="margin-top:10px">Asset</h1>
+                <h1 class="inv-title" id="detailTitle">Asset</h1>
                 <div class="inv-subtitle" id="detailSubtitle"></div>
             </div>
             <div class="inv-actions">
@@ -565,8 +568,6 @@
         byId('workstationsTab').classList.toggle('active', state.activeTab === 'workstations');
         byId('peripheralsTab').classList.toggle('active', state.activeTab === 'peripherals');
         var peripherals = state.activeTab === 'peripherals';
-        byId('sectionTitle').textContent = peripherals ? 'Peripherals' : 'Workstations';
-        byId('sectionSubtitle').textContent = peripherals ? 'Manual inventory for monitors, mice, keyboards, headsets, and other peripherals' : 'Automatic agent inventory and separate manual workstation records';
         byId('rescanButton').classList.toggle('inv-hidden', peripherals || !can('can_sync'));
         byId('settingsButton').classList.toggle('inv-hidden', peripherals || !state.capabilities.canCreateManualWorkstation || !can('can_manage'));
         if (peripherals) byId('settingsPanel').classList.add('inv-hidden');
@@ -1400,6 +1401,7 @@
             if (state.settings) {
                 byId('staleMode').value = state.settings.mode || 'meshcentral';
                 byId('staleDays').value = state.settings.days || 30;
+                byId('ignoredUsers').value = (state.settings.ignoredUsers || []).join('\n');
             }
             byId('settingsWarning').textContent = result.settingsWarning || '';
             setActiveTab(state.activeTab, false);
@@ -1466,7 +1468,7 @@
         } else if (result.kind === 'settings') {
             state.settings = result.settings;
             byId('settingsWarning').textContent = result.settingsWarning || '';
-            showToast('Stale device policy saved.');
+            showToast('Inventory settings saved.');
             send('list', {});
         }
         return true;
@@ -1507,13 +1509,18 @@
         byId('pageSize').addEventListener('change', function () { state.pageSize = Number(this.value) || 25; state.page = 1; renderRows(); });
         byId('previousPage').addEventListener('click', function () { if (state.page > 1) { state.page--; renderRows(); } });
         byId('nextPage').addEventListener('click', function () { var pages = Math.max(1, Math.ceil(filteredAssets().length / state.pageSize)); if (state.page < pages) { state.page++; renderRows(); } });
-        byId('backButton').addEventListener('click', closeDetail);
         byId('saveButton').addEventListener('click', saveAsset);
         byId('deleteButton').addEventListener('click', deleteAsset);
         byId('exportButton').addEventListener('click', exportCsv);
         byId('rescanButton').addEventListener('click', function () { send('rescan', {}); });
         byId('settingsButton').addEventListener('click', function () { byId('settingsPanel').classList.toggle('inv-hidden'); });
-        byId('saveSettings').addEventListener('click', function () { send('settings-update', { settings: { mode: byId('staleMode').value, days: Number(byId('staleDays').value) } }); });
+        byId('saveSettings').addEventListener('click', function () {
+            send('settings-update', { settings: {
+                mode: byId('staleMode').value,
+                days: Number(byId('staleDays').value),
+                ignoredUsers: byId('ignoredUsers').value.split(/\r?\n/).map(function (name) { return name.trim(); }).filter(Boolean)
+            } });
+        });
         byId('assignManualButton').addEventListener('click', function () {
             var user = byId('manualAssignee').value.trim();
             if (!user) { showToast('Enter a username or email.', true); return; }
@@ -1554,7 +1561,6 @@
             if (state.selected && state.selected.nodeid && window.parent.gotoDevice) window.parent.gotoDevice(state.selected.nodeid, 10);
         });
         if (boot.mode === 'device') {
-            byId('backButton').style.display = 'none';
             byId('inventoryTabs').classList.add('inv-hidden');
         }
         setActiveTab(state.activeTab, false);

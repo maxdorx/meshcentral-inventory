@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0 - 2026-10-07
+
+- Added a domain-wide ignored sign-in account list under Inventory settings. Plain usernames match domain-qualified and UPN reports; qualified entries match exactly.
+- Prevented ignored accounts from becoming automatic assignees or signed-in user reviews. Saving the list clears matching pending reviews and agent-derived assignments while keeping manual assignments and bounded audit history.
+- Reduced the Inventory page heading and removed repeated Workstations/Peripherals headings, descriptions, and the duplicate detail back button to leave more room for the device list.
+
 ## 1.1.2 - 2026-10-06
 
 - Changed the URL installer to the immutable GitHub tag archive so MeshCentral deployments whose outbound filtering blocks GitHub's Release Assets host can download updates through `codeload.github.com`.

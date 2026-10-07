@@ -88,6 +88,54 @@ test('first observed endpoint user is assigned automatically', () => {
     assert.equal(asset.assignment.pending.length, 0);
 });
 
+test('ignored accounts match bare usernames across reported forms and qualified names exactly', () => {
+    const ignored = model.normalizeIgnoredUsers([' AdminAdmin ', 'ADMINADMIN', 'Administrator@dax.local']);
+    assert.deepEqual(ignored, ['adminadmin', 'administrator@dax.local']);
+    assert.equal(model.ignoredUserMatches({ id: 'DAX\\ADMINADMIN' }, ignored), true);
+    assert.equal(model.ignoredUserMatches({ id: 'adminadmin@dax.local' }, ignored), true);
+    assert.equal(model.ignoredUserMatches({ id: 'Administrator@other.local' }, ignored), false);
+    assert.equal(model.ignoredUserMatches({ id: 'employee@dax.local' }, ignored), false);
+    assert.deepEqual(model.reportedUsers({
+        upnusers: ['adminadmin@dax.local'], users: ['DAX\\adminadmin', 'DAX\\employee']
+    }, ignored), [{ id: 'dax\\employee', display: 'DAX\\employee' }]);
+    assert.throws(() => model.normalizeIgnoredUsers(['adminadmin,*']), /valid username/);
+    assert.throws(() => model.normalizeIgnoredUsers(Array(101).fill('adminadmin')), /at most 100/);
+});
+
+test('ignored accounts cannot become automatic assignees or pending reviews', () => {
+    const ignored = model.normalizeIgnoredUsers(['adminadmin']);
+    const admin = { id: 'dax\\adminadmin', display: 'DAX\\adminadmin' };
+    const owner = { id: 'owner@dax.local', display: 'owner@dax.local' };
+    const snapshot = sampleSnapshot({ reportedUsers: [admin, owner] });
+    const asset = model.createAsset('inventoryasset//ignored', '', snapshot, 1000);
+    model.applySnapshot(asset, snapshot, 1000, 'agent', [], ignored);
+    assert.deepEqual(asset.assignment.assignees.map((user) => user.id), [owner.id]);
+    assert.deepEqual(asset.assignment.pending, []);
+    assert.deepEqual(asset.currentUsers.map((user) => user.id), [owner.id]);
+    model.applySnapshot(asset, sampleSnapshot({ reportedUsers: [owner, admin] }), 2000, 'agent', [], ignored);
+    assert.deepEqual(asset.assignment.pending, []);
+    model.applySnapshot(asset, sampleSnapshot({ reportedUsers: [owner, admin] }), 3000, 'agent', [], []);
+    assert.deepEqual(asset.assignment.pending.map((user) => user.id), [admin.id]);
+});
+
+test('applying an ignore rule clears existing agent assignments and reviews but preserves manual assignments', () => {
+    const admin = { id: 'adminadmin@dax.local', display: 'AdminAdmin@dax.local' };
+    const snapshot = sampleSnapshot({ reportedUsers: [admin] });
+    const asset = model.createAsset('inventoryasset//old-admin', '', snapshot, 1000);
+    model.applySnapshot(asset, snapshot, 1000, 'agent', []);
+    asset.assignment.pending.push({ id: 'dax\\adminadmin', display: 'DAX\\adminadmin' });
+    assert.equal(model.applyIgnoredUsers(asset, ['adminadmin'], 2000), true);
+    assert.deepEqual(asset.assignment.assignees, []);
+    assert.deepEqual(asset.assignment.pending, []);
+    assert.equal(asset.assignment.initialized, false);
+    assert.equal(asset.status, 'Available');
+    assert.equal(asset.history.filter((item) => item.action === 'assignment.account-ignored').length, 1);
+    assert.equal(model.applyIgnoredUsers(asset, ['adminadmin'], 3000), false);
+    model.assignmentAction(asset, 'manual-replace', admin, 'user//admin', 4000);
+    assert.equal(model.applyIgnoredUsers(asset, ['adminadmin'], 5000), false);
+    assert.deepEqual(asset.assignment.assignees.map((user) => user.id), [admin.id]);
+});
+
 test('a later signed-in user is flagged exactly once for administrator review', () => {
     const first = sampleSnapshot();
     const asset = model.createAsset('inventoryasset//asset-1', '', first, 10000);

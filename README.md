@@ -17,7 +17,7 @@ Restart MeshCentral after enabling plugins. Do not add Inventory to `settings.pl
 
 ## Install
 
-1. Open **My Server → Plugins**.
+1. Open **My Server â†’ Plugins**.
 2. Select **Download Plugin**.
 3. Enter:
 
@@ -40,15 +40,16 @@ Inventory uses the active MeshCentral session. It has no separate login or crede
 | Manage inventory | Denied | Edit lifecycle, assignments, review decisions, and manual records |
 | Synchronize inventory | Denied | Run a full workstation synchronization |
 
-Full administrators can configure plugin permissions from **My Server → Plugins → Inventory → Permissions**.
+Full administrators can configure plugin permissions from **My Server â†’ Plugins â†’ Inventory â†’ Permissions**.
 
 ## Operation
 
 - Agent-backed workstations are created from MeshCentral node and system-information records.
 - The first valid signed-in user becomes the assignee. Later users require administrator review.
+- Full administrators can add ignored sign-in accounts from **Inventory settings**. Enter one account per line. A plain name such as `adminadmin` matches `adminadmin`, `DAX\adminadmin`, and `adminadmin@dax.local`; a qualified name matches only that exact identity. Matching agent users do not become automatic assignees or signed-in user reviews. Saving a rule clears matching existing pending reviews and agent-derived assignments, but retains manual assignments and audit history.
 - Managers can assign a user manually to any workstation. Agent reports with no user keep that assignee; a different reported user appears for review.
 - Stale and missing agents raise review without changing the workstation lifecycle. The stale threshold follows MeshCentral's device-group or domain removal setting by default, one day earlier than removal. When removal is disabled, the default is 30 days.
-- Full administrators can set a custom stale threshold or disable stale detection from **Stale policy**. Missing nodes still raise review. Trusted startup, scheduled, and manual synchronization evaluate these conditions; opening the inventory list does not.
+- Full administrators can set a custom stale threshold or disable stale detection from **Inventory settings**. Missing nodes still raise review. Trusted startup, scheduled, and manual synchronization evaluate these conditions; opening the inventory list does not.
 - Archived workstations appear under **Archived records** and are excluded from active counts. Returning archived agents require administrator restoration.
 - Removed MeshCentral nodes remain as retained inventory records until manually deleted.
 - Manual workstations remain separate from agent-backed workstations. Duplicate serial numbers, UUIDs, and asset tags are blocked or flagged for review.
