@@ -63,6 +63,8 @@ Full administrators can configure plugin permissions from **My Server â†’ P
 
 MeshCentral checks the installed plugin's `configUrl` for a newer semantic version. When **Latest** shows a newer release, select **Upgrade** from the Inventory row's **Action** menu, then refresh MeshCentral.
 
+MeshCentral retains the `downloadUrl` from the installed plugin record for Upgrade. Version 1.2.1 uses a stable `inventory-current` release tag and a direct ZIP on `raw.githubusercontent.com`. If an older installation has a version-pinned URL, update its files to 1.2.1 once and restart MeshCentral; startup reads the local `config.json` back into the plugin record. The release-channel tag points to the same commit as the latest published version tag.
+
 Updating plugin files does not delete inventory records. Back up `meshcentral-data` before server or plugin upgrades.
 
 ## Screenshots
@@ -90,6 +92,8 @@ Updating plugin files does not delete inventory records. Back up `meshcentral-da
 npm test
 npm run package
 ```
+
+The package command also copies the ZIP to `release-assets/MeshCentral-Inventory.zip`. Commit that exact file with the release code, publish it as both the versioned and fixed-name GitHub release assets, then move `inventory-current` to the tested version-tag commit. Publish the immutable version tag and release before moving the channel tag.
 
 ## License
 

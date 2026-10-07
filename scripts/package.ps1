@@ -11,6 +11,8 @@ $dist = Join-Path $project "dist"
 $stage = Join-Path $dist (".inventory-stage-" + [guid]::NewGuid().ToString("N"))
 $archive = Join-Path $dist "MeshCentral-Inventory-$Version.zip"
 $latestArchive = Join-Path $dist "MeshCentral-Inventory.zip"
+$channelDir = Join-Path $project "release-assets"
+$channelArchive = Join-Path $channelDir "MeshCentral-Inventory.zip"
 
 New-Item -ItemType Directory -Path (Join-Path $stage "lib") -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $stage "views") -Force | Out-Null
@@ -64,6 +66,13 @@ if (-not $resolvedDist.StartsWith($resolvedProject + [IO.Path]::DirectorySeparat
 }
 Remove-Item -LiteralPath $resolvedStage -Recurse -Force
 Copy-Item -LiteralPath $archive -Destination $latestArchive -Force
+New-Item -ItemType Directory -Path $channelDir -Force | Out-Null
+$resolvedChannelDir = (Resolve-Path -LiteralPath $channelDir).Path
+if (-not $resolvedChannelDir.StartsWith($resolvedProject + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Release-channel path is outside the project directory.'
+}
+Copy-Item -LiteralPath $archive -Destination $channelArchive -Force
 
 Write-Output $archive
 Write-Output $latestArchive
+Write-Output $channelArchive

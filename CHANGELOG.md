@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1 - 2026-10-07
+
+- Fixed the URL installer to use a stable release-channel tag and a directly served ZIP on `raw.githubusercontent.com`. MeshCentral keeps the installed `downloadUrl` for Upgrade, so version-pinned URLs could not advance to a newer release.
+- Added the identical fixed-name ZIP to the tested release commit and published release assets. The release-channel tag is moved only after the immutable version tag and GitHub release are published.
+
 ## 1.2.0 - 2026-10-07
 
 - Added a domain-wide ignored sign-in account list under Inventory settings. Plain usernames match domain-qualified and UPN reports; qualified entries match exactly.
