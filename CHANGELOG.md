@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.2 - 2026-10-08
+
+- Restored non-administrator visibility for unlinked peripherals by assigning them an explicit domain authorization scope. Workstation-linked peripherals continue to inherit the workstation's device-group visibility.
+- Added a trusted-scan migration for peripheral records created before explicit scopes were introduced.
+
 ## 1.2.1 - 2026-10-07
 
 - Fixed the URL installer to use a stable release-channel tag and a directly served ZIP on `raw.githubusercontent.com`. MeshCentral keeps the installed `downloadUrl` for Upgrade, so version-pinned URLs could not advance to a newer release.

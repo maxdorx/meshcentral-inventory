@@ -53,7 +53,8 @@ Full administrators can configure plugin permissions from **My Server â†’ P
 - Archived workstations appear under **Archived records** and are excluded from active counts. Returning archived agents require administrator restoration.
 - Removed MeshCentral nodes remain as retained inventory records until manually deleted.
 - Manual workstations remain separate from agent-backed workstations. Duplicate serial numbers, UUIDs, and asset tags are blocked or flagged for review.
-- Unscoped manual workstations and peripherals are visible only to full administrators.
+- Unscoped manual workstations and legacy unclassified manual assets are visible only to full administrators.
+- An unlinked peripheral has an explicit domain scope and is visible to users who have Inventory view permission in that domain.
 - A peripheral linked to an agent-backed workstation inherits that workstation's device-group visibility.
 - Peripheral CSV import validates the complete file before saving any rows.
 - Inventory records are stored in MeshCentral's configured database.

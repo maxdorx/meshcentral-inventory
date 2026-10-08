@@ -1,6 +1,6 @@
 {
   "name": "meshcentral-asset-inventory",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "private": true,
   "description": "Asset lifecycle and endpoint-user assignment plugin for MeshCentral",
   "main": "inventory.js",

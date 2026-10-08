@@ -411,14 +411,24 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
             const assetsById = new Map(state.assets.map((asset) => [asset._id, asset]));
             for (const asset of state.assets) {
                 if (isPeripheral(asset)) {
-                    if (asset.links && asset.links.workstationAssetId) {
-                        const linkedWorkstation = assetsById.get(asset.links.workstationAssetId);
-                        const linkedScope = assetScopeMeshId(linkedWorkstation);
-                        if (linkedWorkstation && linkedScope && linkedScope !== assetScopeMeshId(asset)) {
+                    const linkedWorkstation = asset.links && asset.links.workstationAssetId
+                        ? assetsById.get(asset.links.workstationAssetId)
+                        : null;
+                    if (linkedWorkstation) {
+                        const linkedScope = assetScopeMeshId(linkedWorkstation) || 'domain';
+                        const currentScope = asset.scope && asset.scope.kind === 'domain' ? 'domain' : assetScopeMeshId(asset);
+                        if (linkedScope !== currentScope) {
                             applyPeripheralScope(asset, linkedWorkstation);
                             asset.updatedAt = now;
                             await dbSet(asset);
                         }
+                    } else if (!asset.scope || (!asset.scope.kind && !asset.scope.meshid)) {
+                        // Before explicit scopes were introduced, unlinked
+                        // peripherals were domain-visible. Preserve that access
+                        // by migrating them to an explicit domain scope.
+                        applyPeripheralScope(asset, null);
+                        asset.updatedAt = now;
+                        await dbSet(asset);
                     }
                     continue;
                 }
@@ -482,9 +492,11 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
     function visibleToUser(asset, user, accessibleMeshIds) {
         if (!asset || !user || asset.domain !== user.domain) return false;
         if (isFullAdmin(user)) return true;
+        if (asset.scope && asset.scope.kind === 'domain') return true;
         const meshid = assetScopeMeshId(asset);
-        // Manual assets without a device-group scope are domain-wide records
-        // and are intentionally visible only to full administrators.
+        // Legacy manual assets without an explicit domain or device-group scope
+        // remain visible only to full administrators until a trusted scan can
+        // migrate eligible peripheral records.
         const allowed = accessibleMeshIds || new Set(userMeshIds(user));
         return Boolean(meshid && allowed.has(meshid));
     }
@@ -638,10 +650,10 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
     function applyPeripheralScope(asset, linkedWorkstation) {
         const meshid = assetScopeMeshId(linkedWorkstation);
         if (meshid) {
-            asset.scope = { meshid, meshName: linkedWorkstation.meshName || meshName(meshid) || '' };
+            asset.scope = { kind: 'mesh', meshid, meshName: linkedWorkstation.meshName || meshName(meshid) || '' };
             asset.links.workstationMeshId = meshid;
         } else {
-            asset.scope = {};
+            asset.scope = { kind: 'domain' };
             if (asset.links) delete asset.links.workstationMeshId;
         }
         return asset;

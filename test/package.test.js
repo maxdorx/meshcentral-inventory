@@ -464,7 +464,7 @@ test('an agent never merges into a manual workstation and both records receive a
     assert.equal(records.get(manual._id).duplicateConflicts[0].otherAssetId, automatic._id);
 });
 
-test('inventory list is read-only and only returns assets in the users accessible device groups', async () => {
+test('inventory list is read-only and only returns assets in the users accessible scopes', async () => {
     const assets = [
         {
             _id: 'inventoryasset//allowed-workstation', type: 'inventoryasset', domain: '',
@@ -494,6 +494,11 @@ test('inventory list is read-only and only returns assets in the users accessibl
         {
             _id: 'inventoryasset//unscoped-peripheral', type: 'inventoryasset', domain: '',
             assetKind: 'peripheral', source: 'manual', name: 'ADMIN-ONLY-MOUSE',
+            identity: {}, automatic: {}, manual: {}, assignment: { assignees: [], pending: [] }
+        },
+        {
+            _id: 'inventoryasset//domain-peripheral', type: 'inventoryasset', domain: '',
+            assetKind: 'peripheral', source: 'manual', name: 'DOMAIN-HEADSET', scope: { kind: 'domain' },
             identity: {}, automatic: {}, manual: {}, assignment: { assignees: [], pending: [] }
         }
     ];
@@ -528,7 +533,7 @@ test('inventory list is read-only and only returns assets in the users accessibl
     });
 
     assert.equal(response.ok, true);
-    assert.deepEqual(response.result.assets.map((asset) => asset.name), ['VISIBLE-MOUSE', 'VISIBLE-PC']);
+    assert.deepEqual(response.result.assets.map((asset) => asset.name), ['DOMAIN-HEADSET', 'VISIBLE-MOUSE', 'VISIBLE-PC']);
     assert.equal(response.result.capabilities.canCreateManualWorkstation, false);
     assert.equal(inventoryReads, 1);
     assert.equal(writes, 0);
@@ -641,6 +646,12 @@ test('full synchronization loads the inventory collection once for all nodes', a
         links: { workstationAssetId: existingWorkstation._id, workstationName: existingWorkstation.name },
         automatic: {}, manual: {}, peripheral: { type: 'Mouse' }, assignment: { assignees: [], pending: [] }, history: []
     };
+    const unlinkedPeripheral = {
+        _id: 'inventoryasset//unlinked-headset', type: 'inventoryasset', domain: '',
+        assetKind: 'peripheral', source: 'manual', name: 'Shared headset', identity: { serial: 'HEADSET-ONE' },
+        links: {}, automatic: {}, manual: {}, peripheral: { type: 'Headset' },
+        assignment: { assignees: [], pending: [] }, history: []
+    };
     let inventoryReads = 0;
     const saved = [];
     const database = {
@@ -651,7 +662,7 @@ test('full synchronization loads the inventory collection once for all nodes', a
             if (type === 'lastconnect') return callback(null, []);
             if (type === 'inventoryasset') {
                 inventoryReads++;
-                return callback(null, [existingWorkstation, linkedPeripheral]);
+                return callback(null, [existingWorkstation, linkedPeripheral, unlinkedPeripheral]);
             }
             callback(null, []);
         },
@@ -680,8 +691,11 @@ test('full synchronization loads the inventory collection once for all nodes', a
     assert.equal(inventoryReads, 1);
     assert.equal(new Set(saved.map((asset) => asset.nodeid).filter(Boolean)).size, 3);
     const savedPeripheral = saved.find((asset) => asset._id === linkedPeripheral._id);
+    assert.equal(savedPeripheral.scope.kind, 'mesh');
     assert.equal(savedPeripheral.scope.meshid, 'mesh//group-1');
     assert.equal(savedPeripheral.links.workstationMeshId, 'mesh//group-1');
+    const savedUnlinkedPeripheral = saved.find((asset) => asset._id === unlinkedPeripheral._id);
+    assert.equal(savedUnlinkedPeripheral.scope.kind, 'domain');
 });
 
 test('automatic workstation updates reject invalid dates without writing', async () => {
