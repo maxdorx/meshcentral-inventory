@@ -130,6 +130,72 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
         return isWorkstation(asset) && asset && asset.source === 'manual';
     }
 
+    function isManualAsset(asset) {
+        return isPeripheral(asset) || isManualWorkstation(asset);
+    }
+
+    function manualAssetBackupId(assetId) {
+        const id = model.text(assetId, 256);
+        if (!id.startsWith('inventoryasset/')) throw new Error('Invalid manual asset identifier.');
+        return `inventoryassetbackup/${id.substring('inventoryasset/'.length)}`;
+    }
+
+    function cloneDocument(document) {
+        return JSON.parse(JSON.stringify(document));
+    }
+
+    function manualAssetBackup(asset) {
+        return {
+            _id: manualAssetBackupId(asset._id),
+            type: 'inventoryassetbackup',
+            domain: asset.domain,
+            assetId: asset._id,
+            asset: cloneDocument(asset),
+            updatedAt: Date.now()
+        };
+    }
+
+    async function dbSetAsset(asset) {
+        await dbSet(asset);
+        if (isManualAsset(asset)) await dbSet(manualAssetBackup(asset));
+        return asset;
+    }
+
+    async function dbRemoveAsset(asset) {
+        if (isManualAsset(asset)) await dbRemove(manualAssetBackupId(asset._id));
+        await dbRemove(asset._id);
+    }
+
+    async function recoverManualAssets(domain, assets, backups, now) {
+        const assetsById = new Map((assets || []).map((asset) => [asset._id, asset]));
+        const backupsByAssetId = new Map();
+        for (const backup of backups || []) {
+            const snapshot = backup && backup.asset;
+            if (!snapshot || backup.type !== 'inventoryassetbackup' || backup.domain !== domain) continue;
+            if (snapshot._id !== backup.assetId || snapshot.type !== 'inventoryasset' || snapshot.domain !== domain || !isManualAsset(snapshot)) continue;
+            backupsByAssetId.set(snapshot._id, backup);
+            if (assetsById.has(snapshot._id)) continue;
+            const restored = cloneDocument(snapshot);
+            restored.updatedAt = now;
+            model.addHistory(restored, 'asset.restored', 'synchronizer', 'Restored missing manual inventory record from the preservation copy.', now);
+            await dbSet(restored);
+            const refreshedBackup = manualAssetBackup(restored);
+            await dbSet(refreshedBackup);
+            backupsByAssetId.set(restored._id, refreshedBackup);
+            assets.push(restored);
+            assetsById.set(restored._id, restored);
+            log(`Restored preserved manual inventory record ${restored._id}`);
+        }
+        for (const asset of assets || []) {
+            if (!isManualAsset(asset)) continue;
+            const backup = backupsByAssetId.get(asset._id);
+            if (!backup || !backup.asset || backup.asset.updatedAt !== asset.updatedAt) {
+                await dbSet(manualAssetBackup(asset));
+            }
+        }
+        return assets;
+    }
+
     function workstationIdentifiers(asset) {
         return {
             serial: model.normalizeSerial(asset && asset.identity && asset.identity.serial),
@@ -220,7 +286,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
             } else if (next.length === 0 && previous.length > 0) {
                 model.addHistory(asset, 'workstation.duplicate-cleared', actor || 'system', 'Cross-source duplicate warning cleared.', now);
             }
-            await dbSet(asset);
+            await dbSetAsset(asset);
         }
     }
 
@@ -330,7 +396,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                     if (asset.nodeid === node._id) asset.nodeid = asset.nodeids[0] || '';
                     asset.updatedAt = Date.now();
                     model.addHistory(asset, 'node.unlinked', 'synchronizer', `Unlinked ${node._id} while repairing a legacy placeholder-serial merge.`, asset.updatedAt);
-                    await dbSet(asset);
+                    await dbSetAsset(asset);
                     state.byNodeId.delete(node._id);
                     asset = null;
                 }
@@ -354,7 +420,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
             asset.domain = domain;
             model.applySnapshot(asset, snapshot, now, source || 'system', conflicts, settings && settings.ignoredUsers);
             if (settings) model.evaluateReviews(asset, policyForAsset(asset, settings), now);
-            await dbSet(asset);
+            await dbSetAsset(asset);
             indexSyncAsset(state, asset);
             if (deferDuplicateReconcile !== true) {
                 await reconcileCrossSourceDuplicates(domain, assets, source || 'system', now);
@@ -381,13 +447,15 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
             const queuedAt = Date.now();
             if (!force && lastDomainScan.has(domain) && (queuedAt - lastDomainScan.get(domain)) < SCAN_TTL_MS) return;
 
-            const [nodes, sysinfos, lastConnects, assets, settings] = await Promise.all([
+            const [nodes, sysinfos, lastConnects, assets, backups, settings] = await Promise.all([
                 dbAll('node', domain),
                 dbAll('sysinfo', domain),
                 dbAll('lastconnect', domain),
                 dbAll('inventoryasset', domain),
+                dbAll('inventoryassetbackup', domain),
                 domainSettings(domain)
             ]);
+            await recoverManualAssets(domain, assets, backups, now);
             const state = createSyncState(assets);
             const sysinfoByNode = new Map();
             for (const sysinfo of sysinfos) {
@@ -420,7 +488,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                         if (linkedScope !== currentScope) {
                             applyPeripheralScope(asset, linkedWorkstation);
                             asset.updatedAt = now;
-                            await dbSet(asset);
+                            await dbSetAsset(asset);
                         }
                     } else if (!asset.scope || (!asset.scope.kind && !asset.scope.meshid)) {
                         // Before explicit scopes were introduced, unlinked
@@ -428,15 +496,15 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                         // by migrating them to an explicit domain scope.
                         applyPeripheralScope(asset, null);
                         asset.updatedAt = now;
-                        await dbSet(asset);
+                        await dbSetAsset(asset);
                     }
                     continue;
                 }
                 if (isManualWorkstation(asset)) {
-                    if (model.evaluateReviews(asset, null, now)) await dbSet(asset);
+                    if (model.evaluateReviews(asset, null, now)) await dbSetAsset(asset);
                     continue;
                 }
-                if (model.applyIgnoredUsers(asset, settings.ignoredUsers, now)) await dbSet(asset);
+                if (model.applyIgnoredUsers(asset, settings.ignoredUsers, now)) await dbSetAsset(asset);
                 const linked = (asset.nodeids || []).some((nodeid) => activeNodeIds.has(nodeid));
                 if (!linked && asset.automatic && (asset.automatic.online !== false || asset.automatic.nodeExists !== false)) {
                     asset.type = 'inventoryasset';
@@ -445,14 +513,14 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                     asset.automatic.nodeExists = false;
                     asset.updatedAt = now;
                     model.addHistory(asset, 'node.missing', 'synchronizer', 'MeshCentral node is no longer present; inventory retained.', now);
-                    await dbSet(asset);
+                    await dbSetAsset(asset);
                 } else if (linked && asset.automatic && asset.automatic.nodeExists !== true) {
                     asset.type = 'inventoryasset';
                     asset.domain = domain;
                     asset.automatic.nodeExists = true;
-                    await dbSet(asset);
+                    await dbSetAsset(asset);
                 }
-                if (model.evaluateReviews(asset, policyForAsset(asset, settings), now)) await dbSet(asset);
+                if (model.evaluateReviews(asset, policyForAsset(asset, settings), now)) await dbSetAsset(asset);
             }
             await reconcileCrossSourceDuplicates(domain, state.assets, 'synchronizer', now);
             lastDomainScan.set(domain, Date.now());
@@ -741,13 +809,13 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                 const seed = `peripheral\n${Date.now()}\n${crypto.randomBytes(16).toString('hex')}`;
                 const asset = model.createPeripheral(assetId(domain, seed), domain, row.value, actor, Date.now(), row.linkedWorkstation);
                 applyPeripheralScope(asset, row.linkedWorkstation);
-                await dbSet(asset);
+                await dbSetAsset(asset);
                 created.push(asset);
             }
         } catch (error) {
             if (typeof db.Remove === 'function') {
                 for (const asset of created) {
-                    try { await dbRemove(asset._id); } catch (rollbackError) { log(`Unable to roll back peripheral ${asset._id}`, rollbackError); }
+                    try { await dbRemoveAsset(asset); } catch (rollbackError) { log(`Unable to roll back peripheral ${asset._id}`, rollbackError); }
                 }
             }
             throw error;
@@ -809,7 +877,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                 if (prepared.errors.length > 0) throw new Error(prepared.errors.join(' '));
                 const seed = `manual-workstation\n${Date.now()}\n${crypto.randomBytes(16).toString('hex')}`;
                 const asset = model.createManualWorkstation(assetId(domain, seed), domain, prepared.value, session.user._id, Date.now());
-                await dbSet(asset);
+                await dbSetAsset(asset);
                 return { kind: 'workstation-created', asset: publicAsset(asset, true, session.user) };
             });
         }
@@ -880,7 +948,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                     asset.assignment.pending = [];
                     asset.updatedAt = Date.now();
                     model.addHistory(asset, 'peripheral.updated', session.user._id, 'Updated manual peripheral inventory fields', asset.updatedAt);
-                    await dbSet(asset);
+                    await dbSetAsset(asset);
                     return { kind: 'asset', asset: publicAsset(asset, true, session.user) };
                 }
                 if (isManualWorkstation(asset)) {
@@ -905,7 +973,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                     const prepared = prepareManualWorkstation(row, assets, asset);
                     if (prepared.errors.length > 0) throw new Error(prepared.errors.join(' '));
                     applyManualWorkstation(asset, prepared.value, session.user._id, Date.now());
-                    await dbSet(asset);
+                    await dbSetAsset(asset);
                     const currentAssets = assets.filter((item) => item._id !== asset._id).concat([asset]);
                     await reconcileCrossSourceDuplicates(domain, currentAssets, session.user._id, asset.updatedAt);
                     return { kind: 'asset', asset: publicAsset(asset, true, session.user) };
@@ -934,7 +1002,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                 } else {
                     model.addHistory(asset, 'asset.updated', session.user._id, 'Updated manual inventory fields', asset.updatedAt);
                 }
-                await dbSet(asset);
+                await dbSetAsset(asset);
                 return { kind: 'asset', asset: publicAsset(asset, true, session.user) };
             });
         }
@@ -945,7 +1013,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                 const requestedUser = command.user && typeof command.user === 'object' ? command.user : {};
                 model.assignmentAction(asset, model.text(command.assignmentAction, 32), requestedUser, session.user._id, Date.now());
                 asset.type = 'inventoryasset';
-                await dbSet(asset);
+                await dbSetAsset(asset);
                 return { kind: 'asset', asset: publicAsset(asset, true, session.user) };
             });
         }
@@ -957,7 +1025,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                 const reviewAction = model.text(command.reviewAction, 32);
                 if (reviewAction === 'restore' && !isFullAdmin(session.user)) throw new Error('Only a full administrator can restore an archived record.');
                 model.reviewAction(asset, reviewAction, model.text(command.reason, 64), command.until, session.user._id, Date.now());
-                await dbSet(asset);
+                await dbSetAsset(asset);
                 return { kind: 'asset', asset: publicAsset(asset, true, session.user) };
             });
         }
@@ -977,7 +1045,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                 }
                 model.identityConflictAction(asset, identityAction, requestedConflict, session.user._id, Date.now());
                 asset.type = 'inventoryasset';
-                await dbSet(asset);
+                await dbSetAsset(asset);
                 return { kind: 'asset', asset: publicAsset(asset, true, session.user) };
             });
         }
@@ -990,7 +1058,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                     throw new Error('This inventory record can only be deleted after its MeshCentral node is removed and inventory is synchronized.');
                 }
                 if (typeof db.Remove !== 'function') throw new Error('This MeshCentral database does not support record deletion.');
-                await dbRemove(asset._id);
+                await dbRemoveAsset(asset);
                 if (isManualWorkstation(asset)) {
                     const assets = (await dbAll('inventoryasset', domain)).filter((item) => item._id !== asset._id);
                     await reconcileCrossSourceDuplicates(domain, assets, session.user._id, Date.now());

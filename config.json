@@ -1,7 +1,7 @@
 {
   "name": "Inventory",
   "shortName": "inventory",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "author": "maxdorx",
   "description": "Workstation lifecycle from MeshCentral agent details plus manual peripheral inventory and CSV import.",
   "hasAdminPanel": true,

@@ -56,6 +56,7 @@ Full administrators can configure plugin permissions from **My Server â†’ P
 - Unscoped manual workstations and legacy unclassified manual assets are visible only to full administrators.
 - An unlinked peripheral has an explicit domain scope and is visible to users who have Inventory view permission in that domain.
 - A peripheral linked to an agent-backed workstation inherits that workstation's device-group visibility.
+- Manual peripherals and manual workstations keep a separate preservation copy. Trusted startup and synchronization scans restore a missing primary record; confirmed deletion removes both copies.
 - Peripheral CSV import validates the complete file before saving any rows.
 - Inventory records are stored in MeshCentral's configured database.
 - Enabling Inventory uses MeshCentral's Modern UI. Modern themes remain available.

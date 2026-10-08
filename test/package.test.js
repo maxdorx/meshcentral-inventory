@@ -288,7 +288,7 @@ test('manual peripherals support creation, CSV preview validation, workstation l
     const records = new Map([[workstation._id, workstation]]);
     const database = {
         Get(id, callback) { callback(null, records.has(id) ? [records.get(id)] : []); },
-        GetAllTypeNoTypeField(type, domain, callback) { callback(null, type === 'inventoryasset' ? Array.from(records.values()) : []); },
+        GetAllTypeNoTypeField(type, domain, callback) { callback(null, Array.from(records.values()).filter((record) => record.type === type)); },
         Set(document, callback) { records.set(document._id, JSON.parse(JSON.stringify(document))); callback(null); },
         Remove(id, callback) { records.delete(id); callback(null); }
     };
@@ -316,6 +316,9 @@ test('manual peripherals support creation, CSV preview validation, workstation l
     assert.equal(created.assetKind, 'peripheral');
     assert.equal(created.links.workstationAssetId, workstation._id);
     assert.equal(created.assignment.assignees[0].id, 'reception@example.com');
+    const backupId = created.id.replace('inventoryasset/', 'inventoryassetbackup/');
+    assert.equal(records.get(backupId).assetId, created.id);
+    assert.equal(records.get(backupId).asset.assetKind, 'peripheral');
 
     const preview = await invoke({ pluginaction: 'peripheral-preview', rows: [
         { rowNumber: 2, type: 'Keyboard', serial: 'KEY-001', asset_tag: 'PER-002', linked_workstation: 'PC-001' },
@@ -332,6 +335,10 @@ test('manual peripherals support creation, CSV preview validation, workstation l
     const deleted = await invoke({ pluginaction: 'delete', assetId: created.id, confirm: true });
     assert.equal(deleted.ok, true);
     assert.equal(records.has(created.id), false);
+    assert.equal(records.has(backupId), false);
+    const rescanned = await invoke({ pluginaction: 'rescan' });
+    assert.equal(rescanned.ok, true);
+    assert.equal(records.has(created.id), false, 'confirmed deletion must not be restored');
 });
 
 test('agent synchronization never merges a workstation into a manual peripheral with the same serial', async () => {
@@ -355,7 +362,7 @@ test('agent synchronization never merges a workstation into a manual peripheral 
             if (id === `si${node._id}`) return callback(null, [sysinfo]);
             callback(null, records.has(id) ? [records.get(id)] : []);
         },
-        GetAllTypeNoTypeField(type, domain, callback) { callback(null, type === 'inventoryasset' ? Array.from(records.values()) : []); },
+        GetAllTypeNoTypeField(type, domain, callback) { callback(null, Array.from(records.values()).filter((record) => record.type === type)); },
         Set(document, callback) {
             records.set(document._id, JSON.parse(JSON.stringify(document)));
             callback(null);
@@ -369,9 +376,9 @@ test('agent synchronization never merges a workstation into a manual peripheral 
     const plugin = require('../inventory').inventory(pluginHandler);
     plugin.hook_agentCoreIsStable({ dbNodeKey: node._id });
     await Promise.race([completed, new Promise((resolve, reject) => setTimeout(() => reject(new Error('sync timed out')), 1000))]);
-    assert.equal(records.size, 2);
+    assert.equal(Array.from(records.values()).filter((record) => record.type === 'inventoryasset').length, 2);
     assert.equal(records.get(peripheral._id).nodeid, '');
-    const workstation = Array.from(records.values()).find((asset) => asset.assetKind !== 'peripheral');
+    const workstation = Array.from(records.values()).find((asset) => asset.type === 'inventoryasset' && asset.assetKind !== 'peripheral');
     assert.equal(workstation.nodeid, node._id);
     assert.equal(workstation.identity.serial, 'SHARED-SERIAL');
 });
@@ -387,7 +394,7 @@ test('manual workstation creation blocks identifiers already used by automatic i
     const records = new Map([[automatic._id, automatic]]);
     const database = {
         Get(id, callback) { callback(null, records.has(id) ? [records.get(id)] : []); },
-        GetAllTypeNoTypeField(type, domain, callback) { callback(null, type === 'inventoryasset' ? Array.from(records.values()) : []); },
+        GetAllTypeNoTypeField(type, domain, callback) { callback(null, Array.from(records.values()).filter((record) => record.type === type)); },
         Set(document, callback) { records.set(document._id, JSON.parse(JSON.stringify(document))); callback(null); },
         Remove(id, callback) { records.delete(id); callback(null); }
     };
@@ -416,7 +423,7 @@ test('manual workstation creation blocks identifiers already used by automatic i
     assert.equal(response.result.kind, 'workstation-created');
     assert.equal(response.result.asset.source, 'manual');
     assert.equal(response.result.asset.nodeid, '');
-    assert.equal(records.size, 2);
+    assert.equal(Array.from(records.values()).filter((record) => record.type === 'inventoryasset').length, 2);
 });
 
 test('an agent never merges into a manual workstation and both records receive a duplicate warning', async () => {
@@ -440,11 +447,11 @@ test('an agent never merges into a manual workstation and both records receive a
             if (id === `si${node._id}`) return callback(null, [sysinfo]);
             callback(null, records.has(id) ? [records.get(id)] : []);
         },
-        GetAllTypeNoTypeField(type, domain, callback) { callback(null, type === 'inventoryasset' ? Array.from(records.values()) : []); },
+        GetAllTypeNoTypeField(type, domain, callback) { callback(null, Array.from(records.values()).filter((record) => record.type === type)); },
         Set(document, callback) {
             records.set(document._id, JSON.parse(JSON.stringify(document)));
             callback(null);
-            const values = Array.from(records.values());
+            const values = Array.from(records.values()).filter((record) => record.type === 'inventoryasset');
             if (values.length === 2 && values.every((asset) => (asset.duplicateConflicts || []).length === 1)) finish();
         }
     };
@@ -455,7 +462,7 @@ test('an agent never merges into a manual workstation and both records receive a
     const plugin = require('../inventory').inventory(pluginHandler);
     plugin.hook_agentCoreIsStable({ dbNodeKey: node._id });
     await Promise.race([completed, new Promise((resolve, reject) => setTimeout(() => reject(new Error('duplicate reconciliation timed out')), 1000))]);
-    assert.equal(records.size, 2);
+    assert.equal(Array.from(records.values()).filter((record) => record.type === 'inventoryasset').length, 2);
     assert.equal(records.get(manual._id).nodeid, '');
     const automatic = Array.from(records.values()).find((asset) => asset.source === 'automatic');
     assert.ok(automatic);
@@ -696,6 +703,54 @@ test('full synchronization loads the inventory collection once for all nodes', a
     assert.equal(savedPeripheral.links.workstationMeshId, 'mesh//group-1');
     const savedUnlinkedPeripheral = saved.find((asset) => asset._id === unlinkedPeripheral._id);
     assert.equal(savedUnlinkedPeripheral.scope.kind, 'domain');
+    assert.ok(saved.some((record) => record._id === linkedPeripheral._id.replace('inventoryasset/', 'inventoryassetbackup/')));
+    assert.ok(saved.some((record) => record._id === unlinkedPeripheral._id.replace('inventoryasset/', 'inventoryassetbackup/')));
+});
+
+test('trusted scans restore a missing peripheral from its preservation copy', async () => {
+    const peripheral = {
+        _id: 'inventoryasset//preserved-mouse', type: 'inventoryasset', domain: '',
+        assetKind: 'peripheral', source: 'manual', name: 'Preserved mouse', status: 'Available',
+        identity: { serial: 'PRESERVED-001', uuid: '' }, peripheral: { type: 'Mouse' },
+        scope: { kind: 'domain' }, links: {}, manual: {}, automatic: {},
+        assignment: { mode: 'unassigned', assignees: [], pending: [] }, history: [], updatedAt: 1000
+    };
+    const backupId = peripheral._id.replace('inventoryasset/', 'inventoryassetbackup/');
+    const backup = {
+        _id: backupId, type: 'inventoryassetbackup', domain: '', assetId: peripheral._id,
+        asset: JSON.parse(JSON.stringify(peripheral)), updatedAt: 1000
+    };
+    const records = new Map([[backup._id, backup]]);
+    let removes = 0;
+    const database = {
+        Get(id, callback) { callback(null, records.has(id) ? [records.get(id)] : []); },
+        GetAllTypeNoTypeField(type, domain, callback) {
+            callback(null, Array.from(records.values()).filter((record) => record.type === type && record.domain === domain));
+        },
+        Set(document, callback) { records.set(document._id, JSON.parse(JSON.stringify(document))); callback(null); },
+        Remove(id, callback) { removes++; records.delete(id); callback(null); }
+    };
+    const pluginHandler = {
+        parent: { db: database, webserver: { meshes: {}, wsagents: {} }, config: { domains: { '': {} } } },
+        registerPermissions() {}, getAccessPermissions() { return Promise.resolve(() => true); }
+    };
+    const plugin = require('../inventory').inventory(pluginHandler);
+    const session = {
+        domain: { id: '' }, user: { _id: 'user//admin', domain: '', siteadmin: 0xFFFFFFFF },
+        ws: { send(message) { session.response(JSON.parse(message)); } }
+    };
+    const response = await new Promise((resolve) => {
+        session.response = resolve;
+        plugin.serveraction({ requestId: 'restore-preserved-peripheral', pluginaction: 'rescan' }, session);
+    });
+
+    assert.equal(response.ok, true);
+    assert.equal(removes, 0);
+    const restored = records.get(peripheral._id);
+    assert.ok(restored);
+    assert.equal(restored.assetKind, 'peripheral');
+    assert.ok(restored.history.some((entry) => entry.action === 'asset.restored'));
+    assert.equal(records.get(backupId).assetId, peripheral._id);
 });
 
 test('automatic workstation updates reject invalid dates without writing', async () => {

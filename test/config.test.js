@@ -13,7 +13,7 @@ test('manifest has the fields required by the MeshCentral 1.2.5 and 1.2.6 plugin
     }
     assert.equal(config.shortName, 'inventory');
     assert.equal(config.name, 'Inventory');
-    assert.equal(config.version, '1.2.2');
+    assert.equal(config.version, '1.2.3');
     assert.equal(config.hasAdminPanel, true);
     assert.equal(config.repository.type, 'git');
     assert.equal(typeof config.repository.url, 'string');

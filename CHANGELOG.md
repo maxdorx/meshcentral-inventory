@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.3 - 2026-10-08
+
+- Added durable preservation copies for manual peripherals and manual workstations. Trusted startup and synchronization scans restore a missing primary record from its preservation copy.
+- Confirmed deletion removes the preservation copy before removing the primary record, so deliberately deleted assets are not restored.
+- Added upgrade/startup regression coverage proving that missing peripherals are recovered without invoking database deletion.
+
 ## 1.2.2 - 2026-10-08
 
 - Restored non-administrator visibility for unlinked peripherals by assigning them an explicit domain authorization scope. Workstation-linked peripherals continue to inherit the workstation's device-group visibility.
