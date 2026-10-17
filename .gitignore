@@ -1,0 +1,8 @@
+dist/
+node_modules/
+*.log
+docs/screenshots/Screenshot*.png
+HANDOFF.md
+.inventory-stage-*/
+scripts/*
+!scripts/package.ps1
