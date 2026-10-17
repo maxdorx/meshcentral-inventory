@@ -3,13 +3,19 @@
 module.exports.inventory = function inventoryPlugin(pluginHandler) {
     const crypto = require('crypto');
     const model = require('./lib/model');
+    const manifest = require('./config.json');
     const plugin = {};
     const root = pluginHandler.parent;
     const db = root.db;
     const queues = new Map();
     const lastDomainScan = new Map();
     const SCAN_TTL_MS = 5 * 60 * 1000;
+    const INVENTORY_BACKUP_FORMAT = 'meshcentral-inventory-backup';
+    const INVENTORY_BACKUP_SCHEMA = 1;
+    const MAX_BACKUP_BYTES = 25 * 1024 * 1024;
+    const MAX_BACKUP_RECORDS = 50000;
     let untypedRecoveryPromise = null;
+    let inventoryMaintenanceActive = false;
 
     let permissionsRegistered = false;
     function registerPermissions() {
@@ -123,6 +129,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
     }
 
     function withQueue(key, work) {
+        if (inventoryMaintenanceActive) return Promise.reject(new Error('Inventory backup or restore is in progress.'));
         const previous = queues.get(key) || Promise.resolve();
         const current = previous.catch(() => {}).then(work);
         queues.set(key, current);
@@ -160,6 +167,148 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
 
     function cloneDocument(document) {
         return JSON.parse(JSON.stringify(document));
+    }
+
+    function inventoryRecordFamily(id) {
+        if (typeof id !== 'string') return '';
+        for (const family of ['inventoryasset', 'inventoryassetbackup', 'inventorysettings', 'inventorymigration']) {
+            if (id.startsWith(`${family}/`)) return family;
+        }
+        return '';
+    }
+
+    function assertSafeBackupValue(value, depth) {
+        if (depth > 64) throw new Error('Backup data is nested too deeply.');
+        if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
+        if (typeof value === 'number') {
+            if (!Number.isFinite(value)) throw new Error('Backup contains an invalid number.');
+            return;
+        }
+        if (Array.isArray(value)) {
+            for (const item of value) assertSafeBackupValue(item, depth + 1);
+            return;
+        }
+        if (!value || typeof value !== 'object') throw new Error('Backup contains an unsupported value.');
+        const prototype = Object.getPrototypeOf(value);
+        if (prototype !== Object.prototype && prototype !== null) throw new Error('Backup contains an unsupported object.');
+        for (const [key, item] of Object.entries(value)) {
+            if (key === '__proto__' || key === 'prototype' || key === 'constructor') throw new Error('Backup contains an unsafe property name.');
+            assertSafeBackupValue(item, depth + 1);
+        }
+    }
+
+    function validateInventoryRecord(record) {
+        if (!record || typeof record !== 'object' || Array.isArray(record)) throw new Error('Every backup record must be an object.');
+        assertSafeBackupValue(record, 0);
+        const id = record._id;
+        const family = inventoryRecordFamily(id);
+        if (!family || id.length > 512) throw new Error('Backup contains a record outside the Inventory namespace.');
+        if (record.type !== undefined && record.type !== family) throw new Error(`Backup record ${id} has an invalid type.`);
+        // Older manual peripheral records can intentionally have no type. All
+        // other Inventory families have always required one.
+        if (record.type === undefined && family !== 'inventoryasset') throw new Error(`Backup record ${id} is missing its type.`);
+        if (record.domain !== undefined && typeof record.domain !== 'string') throw new Error(`Backup record ${id} has an invalid domain.`);
+        return family;
+    }
+
+    function backupChecksum(records) {
+        return crypto.createHash('sha256').update(JSON.stringify(records)).digest('hex');
+    }
+
+    async function collectInventoryDocuments() {
+        if (typeof db.GetAll !== 'function') throw new Error('This MeshCentral database does not support full Inventory backups.');
+        const documents = await dbGetAll();
+        const records = documents
+            .filter((document) => document && inventoryRecordFamily(document._id))
+            .map(cloneDocument)
+            .sort((left, right) => left._id.localeCompare(right._id));
+        for (const record of records) validateInventoryRecord(record);
+        return records;
+    }
+
+    function createInventoryBackup(records) {
+        const counts = { inventoryasset: 0, inventoryassetbackup: 0, inventorysettings: 0, inventorymigration: 0, untyped: 0 };
+        for (const record of records) {
+            counts[inventoryRecordFamily(record._id)]++;
+            if (record.type === undefined) counts.untyped++;
+        }
+        return {
+            format: INVENTORY_BACKUP_FORMAT,
+            schemaVersion: INVENTORY_BACKUP_SCHEMA,
+            pluginVersion: manifest.version,
+            exportedAt: new Date().toISOString(),
+            recordCount: records.length,
+            counts,
+            checksum: backupChecksum(records),
+            records
+        };
+    }
+
+    function validateInventoryBackup(backup) {
+        if (!backup || typeof backup !== 'object' || Array.isArray(backup)) throw new Error('The selected file is not an Inventory backup.');
+        let serialized;
+        try { serialized = JSON.stringify(backup); } catch (error) { throw new Error('The selected backup cannot be read.'); }
+        if (Buffer.byteLength(serialized, 'utf8') > MAX_BACKUP_BYTES) throw new Error('Inventory backup files are limited to 25 MB.');
+        if (backup.format !== INVENTORY_BACKUP_FORMAT || backup.schemaVersion !== INVENTORY_BACKUP_SCHEMA) throw new Error('The selected file uses an unsupported Inventory backup format.');
+        if (!Array.isArray(backup.records) || backup.records.length > MAX_BACKUP_RECORDS) throw new Error('The Inventory backup has an invalid record list.');
+        if (backup.recordCount !== backup.records.length) throw new Error('The Inventory backup record count does not match its contents.');
+        const ids = new Set();
+        for (const record of backup.records) {
+            validateInventoryRecord(record);
+            if (ids.has(record._id)) throw new Error(`The Inventory backup contains duplicate record ${record._id}.`);
+            ids.add(record._id);
+        }
+        if (typeof backup.checksum !== 'string' || backupChecksum(backup.records) !== backup.checksum.toLowerCase()) throw new Error('The Inventory backup checksum does not match its contents.');
+        return backup.records.map(cloneDocument);
+    }
+
+    async function waitForInventoryQueues() {
+        if (untypedRecoveryPromise) await untypedRecoveryPromise.catch(() => {});
+        const pending = Array.from(queues.values());
+        if (pending.length > 0) await Promise.all(pending.map((promise) => promise.catch(() => {})));
+    }
+
+    async function withInventoryMaintenance(work) {
+        if (inventoryMaintenanceActive) throw new Error('Another Inventory backup or restore is already running.');
+        inventoryMaintenanceActive = true;
+        try {
+            await waitForInventoryQueues();
+            return await work();
+        } finally {
+            inventoryMaintenanceActive = false;
+        }
+    }
+
+    async function restoreInventoryBackup(backup) {
+        if (typeof db.Remove !== 'function') throw new Error('This MeshCentral database does not support Inventory restore.');
+        const incoming = validateInventoryBackup(backup);
+        const existing = await collectInventoryDocuments();
+        const existingIds = new Set(existing.map((record) => record._id));
+        const incomingIds = new Set(incoming.map((record) => record._id));
+        const writtenIds = [];
+        try {
+            for (const record of incoming) {
+                await dbSet(record);
+                writtenIds.push(record._id);
+            }
+            for (const record of existing) {
+                if (!incomingIds.has(record._id)) await dbRemove(record._id);
+            }
+        } catch (error) {
+            const rollbackErrors = [];
+            for (const record of existing) {
+                try { await dbSet(record); } catch (rollbackError) { rollbackErrors.push(rollbackError); }
+            }
+            for (const id of writtenIds) {
+                if (!existingIds.has(id)) {
+                    try { await dbRemove(id); } catch (rollbackError) { rollbackErrors.push(rollbackError); }
+                }
+            }
+            if (rollbackErrors.length > 0) throw new Error(`Inventory restore failed and rollback was incomplete: ${error.message || error}`);
+            throw new Error(`Inventory restore failed; the previous Inventory data was restored: ${error.message || error}`);
+        }
+        lastDomainScan.clear();
+        return { restored: incoming.length, removed: existing.filter((record) => !incomingIds.has(record._id)).length };
     }
 
     function manualAssetBackup(asset) {
@@ -668,6 +817,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
     async function syncNode(node, suppliedSysinfo, source, authoritativeUsers, suppliedLastConnectTime, deferDuplicateReconcile) {
         // The default MeshCentral domain is the valid empty string.
         if (!node || !node._id || node.domain === null || node.domain === undefined) return null;
+        if (inventoryMaintenanceActive) return null;
         // Agent hooks can fire before the delayed startup scan. Do not let one
         // recreate and overwrite a hidden record while the type-field recovery
         // migration is still pending.
@@ -682,6 +832,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
     }
 
     async function scanDomain(domain, force) {
+        if (inventoryMaintenanceActive) return null;
         await recoverUntypedInventoryAssets();
         const now = Date.now();
         if (!force && lastDomainScan.has(domain) && (now - lastDomainScan.get(domain)) < SCAN_TTL_MS) return;
@@ -1154,6 +1305,7 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
     async function handleBrowserAction(command, session) {
         const action = model.text(command.pluginaction, 64);
         const domain = session.domain.id;
+        if (inventoryMaintenanceActive) throw new Error('Inventory backup or restore is in progress. Try again shortly.');
 
         if (action === 'list') {
             const check = await permissions(session.user, {});
@@ -1169,7 +1321,10 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
                 kind: 'list', assets: output, summary: summary(output), permissions: check('_ALL_'),
                 settings, settingsWarning: settingsWarning(domain, settings),
                 peripheralTypes: model.PERIPHERAL_TYPES,
-                capabilities: { canCreateManualWorkstation: isFullAdmin(session.user) }
+                capabilities: {
+                    canCreateManualWorkstation: isFullAdmin(session.user),
+                    canBackupRestore: isFullAdmin(session.user) && check('can_manage')
+                }
             };
         }
 
@@ -1197,6 +1352,28 @@ module.exports.inventory = function inventoryPlugin(pluginHandler) {
             });
             await scanDomain(domain, true);
             return { kind: 'settings', settings, settingsWarning: settingsWarning(domain, settings) };
+        }
+
+        if (action === 'backup-export') {
+            if (!isFullAdmin(session.user)) throw new Error('Only a full administrator can back up Inventory.');
+            const check = await permissions(session.user, {});
+            if (!check('can_manage')) throw new Error('Permission denied.');
+            return withInventoryMaintenance(async () => {
+                const backup = createInventoryBackup(await collectInventoryDocuments());
+                return { kind: 'backup', backup };
+            });
+        }
+
+        if (action === 'backup-restore') {
+            if (!isFullAdmin(session.user)) throw new Error('Only a full administrator can restore Inventory.');
+            const check = await permissions(session.user, {});
+            if (!check('can_manage')) throw new Error('Permission denied.');
+            if (command.confirm !== 'RESTORE INVENTORY') throw new Error('Inventory restore confirmation is required.');
+            return withInventoryMaintenance(async () => {
+                const restored = await restoreInventoryBackup(command.backup);
+                log(`Restored ${restored.restored} Inventory records from a full backup for ${session.user._id}`);
+                return { kind: 'backup-restored', restored: restored.restored, removed: restored.removed };
+            });
         }
 
         if (action === 'workstation-create') {

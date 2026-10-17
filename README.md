@@ -12,6 +12,7 @@ Inventory and lifecycle management for MeshCentral workstations and peripherals.
 - Provides lifecycle states, notes, locations, purchase dates, and warranties.
 - Detects missing, stale, duplicate, and conflicting records.
 - Includes CSV peripheral import/export, permissions, and audit history.
+- Downloads and restores a full, validated Inventory backup.
 
 ## How it works
 
@@ -48,7 +49,7 @@ Permissions are configured from the Inventory entry under **My Server → Plugin
 
 ## Updates
 
-Use **Upgrade** from the Inventory plugin row when MeshCentral reports a newer version. Updating plugin files does not delete inventory records. Back up `meshcentral-data` before server or plugin upgrades.
+Use **Upgrade** from the Inventory plugin row when MeshCentral reports a newer version. Updating plugin files does not delete inventory records. Full administrators can download or restore Inventory data from **Inventory settings**.
 
 ## Development
 

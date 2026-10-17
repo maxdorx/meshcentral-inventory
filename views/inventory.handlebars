@@ -204,6 +204,17 @@
             </div>
             <p class="inv-review" id="settingsWarning"></p>
             <button class="inv-button primary" id="saveSettings" type="button">Save settings</button>
+            <div class="inv-hidden" id="backupControls">
+                <hr>
+                <h3>Full Inventory backup</h3>
+                <p class="inv-muted">Download every Inventory record, including workstations, peripherals, archived records, settings, migration state, and preservation copies. MeshCentral nodes, users, and server settings are not included.</p>
+                <div class="inv-actions">
+                    <button class="inv-button" id="downloadBackupButton" type="button">Download backup</button>
+                    <button class="inv-button" id="restoreBackupButton" type="button">Restore backup</button>
+                    <input id="restoreBackupInput" class="inv-hidden" type="file" accept=".json,application/json">
+                </div>
+                <p class="inv-muted">Restoring replaces all Inventory-owned records across every domain. The backup is fully validated before any database changes are made.</p>
+            </div>
         </section>
 
         <div class="inv-grid" id="summaryCards"></div>
@@ -1432,6 +1443,44 @@
         reader.readAsText(file);
     }
 
+    function downloadInventoryBackup(backup) {
+        var text = JSON.stringify(backup, null, 2);
+        var blob = new Blob([text], { type: 'application/json;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        var link = document.createElement('a');
+        var stamp = value(backup.exportedAt, new Date().toISOString()).replace(/[:.]/g, '-');
+        link.href = url;
+        link.download = 'meshcentral-inventory-backup-' + stamp + '.json';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+    }
+
+    function selectInventoryBackup(event) {
+        var file = event.target.files && event.target.files[0];
+        event.target.value = '';
+        if (!file) return;
+        if (file.size > 25 * 1024 * 1024) { showToast('Inventory backup files are limited to 25 MB.', true); return; }
+        var reader = new FileReader();
+        reader.onload = function () {
+            var backup;
+            try {
+                backup = JSON.parse(reader.result);
+                if (!backup || backup.format !== 'meshcentral-inventory-backup' || !Array.isArray(backup.records)) throw new Error('The selected file is not an Inventory backup.');
+            } catch (error) {
+                showToast(error.message || 'The selected backup could not be read.', true);
+                return;
+            }
+            var count = backup.records.length;
+            var confirmed = window.confirm('Restore ' + count + ' Inventory record' + (count === 1 ? '' : 's') + '?\n\nThis replaces all Inventory data across every domain. MeshCentral nodes, users, and server settings are not changed.');
+            if (!confirmed) return;
+            send('backup-restore', { backup: backup, confirm: 'RESTORE INVENTORY' });
+        };
+        reader.onerror = function () { showToast('The Inventory backup file could not be read.', true); };
+        reader.readAsText(file);
+    }
+
     function receive(message) {
         // MeshCentral delivers plugin responses through the parent page. More
         // than one Inventory iframe can exist there (the dashboard plus a
@@ -1454,6 +1503,7 @@
             state.permissions = result.permissions || state.permissions;
             state.peripheralTypes = result.peripheralTypes || state.peripheralTypes;
             state.capabilities = result.capabilities || state.capabilities;
+            byId('backupControls').classList.toggle('inv-hidden', !state.capabilities.canBackupRestore);
             state.settings = result.settings || state.settings;
             if (state.settings) {
                 byId('staleMode').value = state.settings.mode || 'meshcentral';
@@ -1527,6 +1577,15 @@
             byId('settingsWarning').textContent = result.settingsWarning || '';
             showToast('Inventory settings saved.');
             send('list', {});
+        } else if (result.kind === 'backup') {
+            downloadInventoryBackup(result.backup);
+            showToast('Full Inventory backup downloaded.');
+        } else if (result.kind === 'backup-restored') {
+            state.selected = null;
+            byId('detail').classList.remove('open');
+            byId('dashboard').classList.remove('hidden');
+            showToast('Inventory backup restored: ' + result.restored + ' records restored, ' + result.removed + ' replaced records removed.');
+            send('list', {});
         }
         return true;
     }
@@ -1578,6 +1637,9 @@
                 ignoredUsers: byId('ignoredUsers').value.split(/\r?\n/).map(function (name) { return name.trim(); }).filter(Boolean)
             } });
         });
+        byId('downloadBackupButton').addEventListener('click', function () { send('backup-export', {}); });
+        byId('restoreBackupButton').addEventListener('click', function () { byId('restoreBackupInput').click(); });
+        byId('restoreBackupInput').addEventListener('change', selectInventoryBackup);
         byId('assignManualButton').addEventListener('click', function () {
             var user = byId('manualAssignee').value.trim();
             if (!user) { showToast('Enter a username or email.', true); return; }

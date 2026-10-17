@@ -1273,6 +1273,10 @@ test('dashboard actions share the inventory tab row and unchanged saves stop in 
     assert.doesNotMatch(view, /inv-dashboard-actions/);
     assert.match(view, /No changes to save\./);
     assert.match(view, /Object\.keys\(changes\)\.some/);
+    assert.match(view, /id="downloadBackupButton"/);
+    assert.match(view, /id="restoreBackupButton"/);
+    assert.match(view, /new Blob\(\[text\]/);
+    assert.match(view, /confirm: 'RESTORE INVENTORY'/);
 });
 
 test('browser application script is valid JavaScript after boot data is rendered', () => {
@@ -1285,6 +1289,178 @@ test('browser application script is valid JavaScript after boot data is rendered
         nodeid: '', mode: 'dashboard', user: {}, permissions: ['can_view'], lifecycleStates: []
     }));
     assert.doesNotThrow(() => new vm.Script(rendered, { filename: 'inventory.handlebars.inline.js' }));
+});
+
+test('full Inventory backup downloads and restores only Inventory-owned records', async () => {
+    const initial = [
+        { _id: 'node//device-1', type: 'node', domain: '', name: 'Mesh node' },
+        { _id: 'inventoryasset//asset-1', type: 'inventoryasset', domain: '', name: 'Workstation', assignment: { assignees: [] } },
+        { _id: 'inventoryasset//legacy-peripheral', domain: '', assetKind: 'peripheral', name: 'Legacy peripheral' },
+        { _id: 'inventoryassetbackup//manual-1', type: 'inventoryassetbackup', domain: '', assetId: 'inventoryasset//manual-1', asset: { _id: 'inventoryasset//manual-1' } },
+        { _id: 'inventorysettings/', type: 'inventorysettings', domain: '', mode: 'custom', days: 45 },
+        { _id: 'inventorymigration/type-field-v2', type: 'inventorymigration', complete: true }
+    ];
+    const records = new Map(initial.map((record) => [record._id, JSON.parse(JSON.stringify(record))]));
+    const database = {
+        Get(id, callback) { callback(null, records.has(id) ? [records.get(id)] : []); },
+        GetAll(callback) { callback(null, Array.from(records.values())); },
+        GetAllTypeNoTypeField(type, domain, callback) {
+            callback(null, Array.from(records.values()).filter((record) => record.type === type && record.domain === domain));
+        },
+        Set(record, callback) { records.set(record._id, JSON.parse(JSON.stringify(record))); callback(null); },
+        Remove(id, callback) { records.delete(id); callback(null); }
+    };
+    const pluginHandler = {
+        parent: { db: database, webserver: {}, config: { domains: { '': {} } } },
+        registerPermissions() {},
+        getAccessPermissions() { return Promise.resolve(() => true); }
+    };
+    const plugin = require('../inventory').inventory(pluginHandler);
+    const session = {
+        domain: { id: '' }, user: { _id: 'user//admin', domain: '', siteadmin: 0xFFFFFFFF },
+        ws: { send(message) { session.response(JSON.parse(message)); } }
+    };
+    const invoke = (pluginaction, extra) => new Promise((resolve) => {
+        session.response = resolve;
+        plugin.serveraction(Object.assign({ requestId: pluginaction, pluginaction }, extra || {}), session);
+    });
+
+    const exported = await invoke('backup-export');
+    assert.equal(exported.ok, true);
+    assert.equal(exported.result.kind, 'backup');
+    const backup = exported.result.backup;
+    assert.equal(backup.format, 'meshcentral-inventory-backup');
+    assert.equal(backup.schemaVersion, 1);
+    assert.equal(backup.recordCount, 5);
+    assert.equal(backup.counts.untyped, 1);
+    assert.equal(backup.records.some((record) => record._id === 'node//device-1'), false);
+
+    records.get('inventoryasset//asset-1').name = 'Changed after backup';
+    records.delete('inventorysettings/');
+    records.set('inventoryasset//added-later', { _id: 'inventoryasset//added-later', type: 'inventoryasset', domain: '', name: 'Added later' });
+    const restored = await invoke('backup-restore', { backup, confirm: 'RESTORE INVENTORY' });
+    assert.equal(restored.ok, true);
+    assert.equal(restored.result.kind, 'backup-restored');
+    assert.equal(restored.result.restored, 5);
+    assert.equal(restored.result.removed, 1);
+    assert.equal(records.get('inventoryasset//asset-1').name, 'Workstation');
+    assert.equal(records.get('inventorysettings/').days, 45);
+    assert.equal(records.has('inventoryasset//added-later'), false);
+    assert.equal(records.get('node//device-1').name, 'Mesh node');
+});
+
+test('Inventory restore rejects non-Inventory records before changing the database', async () => {
+    const records = new Map([
+        ['inventoryasset//safe', { _id: 'inventoryasset//safe', type: 'inventoryasset', domain: '', name: 'Safe' }],
+        ['node//device-1', { _id: 'node//device-1', type: 'node', domain: '', name: 'Node' }]
+    ]);
+    let writes = 0;
+    let removals = 0;
+    const database = {
+        Get() {},
+        GetAll(callback) { callback(null, Array.from(records.values())); },
+        GetAllTypeNoTypeField(type, domain, callback) { callback(null, []); },
+        Set(record, callback) { writes++; callback(null); },
+        Remove(id, callback) { removals++; callback(null); }
+    };
+    const pluginHandler = {
+        parent: { db: database, webserver: {}, config: { domains: { '': {} } } },
+        registerPermissions() {},
+        getAccessPermissions() { return Promise.resolve(() => true); }
+    };
+    const plugin = require('../inventory').inventory(pluginHandler);
+    const session = {
+        domain: { id: '' }, user: { _id: 'user//admin', domain: '', siteadmin: 0xFFFFFFFF },
+        ws: { send(message) { session.response(JSON.parse(message)); } }
+    };
+    const badRecords = [{ _id: 'node//injected', type: 'node', domain: '', name: 'Injected' }];
+    const backup = {
+        format: 'meshcentral-inventory-backup', schemaVersion: 1, pluginVersion: 'test',
+        exportedAt: new Date().toISOString(), recordCount: 1,
+        checksum: crypto.createHash('sha256').update(JSON.stringify(badRecords)).digest('hex'), records: badRecords
+    };
+    const response = await new Promise((resolve) => {
+        session.response = resolve;
+        plugin.serveraction({ requestId: 'unsafe-restore', pluginaction: 'backup-restore', backup, confirm: 'RESTORE INVENTORY' }, session);
+    });
+    assert.equal(response.ok, false);
+    assert.match(response.error, /outside the Inventory namespace/);
+    assert.equal(writes, 0);
+    assert.equal(removals, 0);
+});
+
+test('failed Inventory restore rolls back overwritten and newly added records', async () => {
+    const records = new Map([
+        ['inventoryasset//safe', { _id: 'inventoryasset//safe', type: 'inventoryasset', domain: '', name: 'Current value' }],
+        ['inventoryasset//obsolete', { _id: 'inventoryasset//obsolete', type: 'inventoryasset', domain: '', name: 'Keep after rollback' }],
+        ['node//device-1', { _id: 'node//device-1', type: 'node', domain: '', name: 'Node' }]
+    ]);
+    let failRemoval = true;
+    const database = {
+        Get() {},
+        GetAll(callback) { callback(null, Array.from(records.values())); },
+        GetAllTypeNoTypeField(type, domain, callback) { callback(null, []); },
+        Set(record, callback) { records.set(record._id, JSON.parse(JSON.stringify(record))); callback(null); },
+        Remove(id, callback) {
+            if (id === 'inventoryasset//obsolete' && failRemoval) {
+                failRemoval = false;
+                callback(new Error('simulated delete failure'));
+                return;
+            }
+            records.delete(id);
+            callback(null);
+        }
+    };
+    const pluginHandler = {
+        parent: { db: database, webserver: {}, config: { domains: { '': {} } } },
+        registerPermissions() {}, getAccessPermissions() { return Promise.resolve(() => true); }
+    };
+    const plugin = require('../inventory').inventory(pluginHandler);
+    const session = {
+        domain: { id: '' }, user: { _id: 'user//admin', domain: '', siteadmin: 0xFFFFFFFF },
+        ws: { send(message) { session.response(JSON.parse(message)); } }
+    };
+    const backupRecords = [
+        { _id: 'inventoryasset//safe', type: 'inventoryasset', domain: '', name: 'Backup value' },
+        { _id: 'inventoryasset//new', type: 'inventoryasset', domain: '', name: 'New from backup' }
+    ];
+    const backup = {
+        format: 'meshcentral-inventory-backup', schemaVersion: 1, pluginVersion: 'test',
+        exportedAt: new Date().toISOString(), recordCount: backupRecords.length,
+        checksum: crypto.createHash('sha256').update(JSON.stringify(backupRecords)).digest('hex'), records: backupRecords
+    };
+    const response = await new Promise((resolve) => {
+        session.response = resolve;
+        plugin.serveraction({ requestId: 'failed-restore', pluginaction: 'backup-restore', backup, confirm: 'RESTORE INVENTORY' }, session);
+    });
+    assert.equal(response.ok, false);
+    assert.match(response.error, /previous Inventory data was restored/);
+    assert.equal(records.get('inventoryasset//safe').name, 'Current value');
+    assert.equal(records.get('inventoryasset//obsolete').name, 'Keep after rollback');
+    assert.equal(records.has('inventoryasset//new'), false);
+    assert.equal(records.get('node//device-1').name, 'Node');
+});
+
+test('Inventory backup and restore controls are limited to full administrators', async () => {
+    const database = {
+        GetAll(callback) { callback(null, []); }, Get() {}, Set() {}, Remove() {},
+        GetAllTypeNoTypeField(type, domain, callback) { callback(null, []); }
+    };
+    const pluginHandler = {
+        parent: { db: database, webserver: {}, config: { domains: { '': {} } } },
+        registerPermissions() {}, getAccessPermissions() { return Promise.resolve(() => true); }
+    };
+    const plugin = require('../inventory').inventory(pluginHandler);
+    const session = {
+        domain: { id: '' }, user: { _id: 'user//manager', domain: '', siteadmin: 0 },
+        ws: { send(message) { session.response(JSON.parse(message)); } }
+    };
+    const response = await new Promise((resolve) => {
+        session.response = resolve;
+        plugin.serveraction({ requestId: 'backup-denied', pluginaction: 'backup-export' }, session);
+    });
+    assert.equal(response.ok, false);
+    assert.match(response.error, /full administrator/);
 });
 
 test('custom navigation clears all modern and classic selected-state classes', () => {
