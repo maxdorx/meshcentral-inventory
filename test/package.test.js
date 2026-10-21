@@ -1260,12 +1260,13 @@ test('dashboard search is limited to asset name and assigned user', () => {
     assert.match(view, /Search device or assigned user/);
 });
 
-test('dashboard actions share the inventory tab row and detail saves track dirty state in the browser', () => {
+test('dashboard actions share the inventory tab row, settings use a modal, and detail saves track dirty state', () => {
     const view = fs.readFileSync(path.join(__dirname, '..', 'views', 'inventory.handlebars'), 'utf8');
     const tabbarStart = view.indexOf('<div class="inv-tabbar">');
-    const settingsStart = view.indexOf('<section class="inv-section inv-hidden" id="settingsPanel">');
+    const settingsStart = view.indexOf('<div class="inv-modal-backdrop inv-hidden" id="settingsModal">');
     const tabbar = view.substring(tabbarStart, settingsStart);
     assert.ok(tabbarStart >= 0);
+    assert.ok(settingsStart > tabbarStart);
     assert.match(tabbar, /id="inventoryTabs"/);
     for (const id of ['exportButton', 'rescanButton', 'settingsButton', 'addWorkstationButton', 'templateButton', 'importButton', 'addPeripheralButton']) {
         assert.match(tabbar, new RegExp(`id="${id}"`));
@@ -1276,6 +1277,11 @@ test('dashboard actions share the inventory tab row and detail saves track dirty
     assert.match(view, /JSON\.stringify\(detailFormValue\(\)\) !== state\.detailBaseline/);
     assert.match(view, /id="saveButton"[^>]*disabled/);
     assert.match(view, /id="revertButton"[^>]*disabled/);
+    assert.match(view, /id="settingsModal"/);
+    assert.match(view, /id="closeSettingsModal"/);
+    assert.match(view, /id="cancelSettings"/);
+    assert.match(view, /function openSettingsModal\(\)/);
+    assert.match(view, /\.inv-modal-backdrop \{[^}]*inset: 0 0 66px/s);
     assert.match(view, /id="downloadBackupButton"/);
     assert.match(view, /id="restoreBackupButton"/);
     assert.match(view, /new Blob\(\[text\]/);

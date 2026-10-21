@@ -162,8 +162,11 @@
         .inv-history-action { font-weight: 650; }
         .inv-toast { position: fixed; right: 18px; bottom: 18px; max-width: 440px; padding: 11px 14px; border-radius: 6px; background: #222; color: #fff; box-shadow: 0 4px 22px rgba(0,0,0,.35); display: none; z-index: 20; }
         .inv-toast.error { background: #842029; }
-        .inv-modal-backdrop { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(0,0,0,.68); }
-        .inv-modal { width: min(920px, 100%); max-height: calc(100vh - 40px); overflow: auto; border: 1px solid var(--inv-border); border-radius: 12px; background: var(--bs-body-bg, #202124); color: inherit; box-shadow: 0 16px 50px rgba(0,0,0,.5); }
+        .inv-modal-backdrop { position: fixed; inset: 0 0 66px; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(0,0,0,.68); }
+        .inv-modal { width: min(920px, 100%); max-height: calc(100vh - 106px); overflow: auto; overscroll-behavior: contain; border: 1px solid var(--inv-border); border-radius: 12px; background: var(--bs-body-bg, #202124); color: inherit; box-shadow: 0 16px 50px rgba(0,0,0,.5); }
+        .inv-settings-panel h3 { margin: 0 0 12px; font-size: 15px; }
+        .inv-settings-panel #backupControls { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--inv-border); }
+        .inv-settings-panel #backupControls hr { display: none; }
         .inv-modal-header, .inv-modal-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--inv-border); }
         .inv-modal-header { position: sticky; top: 0; z-index: 2; background: var(--bs-body-bg, #202124); }
         .inv-modal-footer { position: sticky; bottom: 0; z-index: 2; justify-content: flex-end; border-top: 1px solid var(--inv-border); border-bottom: 0; background: var(--bs-body-bg, #202124); }
@@ -196,7 +199,7 @@
             .inv-tabbar .inv-actions { width: 100%; }
             .inv-tabbar .inv-actions > .primary { margin-left: auto; }
             .inv-modal-backdrop { padding: 8px; }
-            .inv-modal { max-height: calc(100vh - 16px); }
+            .inv-modal { max-height: calc(100vh - 82px); }
         }
     </style>
 </head>
@@ -225,33 +228,42 @@
             </div>
         </div>
 
-        <section class="inv-section inv-hidden" id="settingsPanel">
-            <h2>Inventory settings</h2>
-            <h3>Stale device policy</h3>
-            <div class="inv-form-grid">
-                <div class="inv-field"><label for="staleMode">Detection</label><select class="inv-select" id="staleMode"><option value="meshcentral">Follow MeshCentral removal settings</option><option value="custom">Custom threshold</option><option value="disabled">Disable stale detection</option></select></div>
-                <div class="inv-field"><label for="staleDays">Custom threshold, days</label><input class="inv-input" id="staleDays" type="number" min="1" step="1" value="30"></div>
-            </div>
-            <p class="inv-muted">When MeshCentral auto-removal is off, the default threshold is 30 days. Missing nodes still require review.</p>
-            <div class="inv-field">
-                <label for="ignoredUsers">Ignored sign-in accounts (one per line)</label>
-                <textarea class="inv-textarea" id="ignoredUsers" rows="4" placeholder="serviceaccount&#10;Administrator@example.test"></textarea>
-                <span class="inv-muted">A plain username matches that name in any domain or UPN. A qualified name matches only the exact account. Ignored accounts are excluded from automatic assignment and signed-in user review.</span>
-            </div>
-            <p class="inv-review" id="settingsWarning"></p>
-            <button class="inv-button primary" id="saveSettings" type="button">Save settings</button>
-            <div class="inv-hidden" id="backupControls">
-                <hr>
-                <h3>Full Inventory backup</h3>
-                <p class="inv-muted">Download every Inventory record, including workstations, peripherals, archived records, settings, migration state, and preservation copies. MeshCentral nodes, users, and server settings are not included.</p>
-                <div class="inv-actions">
-                    <button class="inv-button" id="downloadBackupButton" type="button">Download backup</button>
-                    <button class="inv-button" id="restoreBackupButton" type="button">Restore backup</button>
-                    <input id="restoreBackupInput" class="inv-hidden" type="file" accept=".json,application/json">
+        <div class="inv-modal-backdrop inv-hidden" id="settingsModal">
+            <div class="inv-modal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+                <div class="inv-modal-header"><h2 id="settingsModalTitle">Inventory settings</h2><button class="inv-close" id="closeSettingsModal" type="button" aria-label="Close">×</button></div>
+                <div class="inv-modal-body">
+                    <section class="inv-settings-panel" id="settingsPanel">
+                        <h3>Stale device policy</h3>
+                        <div class="inv-form-grid">
+                            <div class="inv-field"><label for="staleMode">Detection</label><select class="inv-select" id="staleMode"><option value="meshcentral">Follow MeshCentral removal settings</option><option value="custom">Custom threshold</option><option value="disabled">Disable stale detection</option></select></div>
+                            <div class="inv-field"><label for="staleDays">Custom threshold, days</label><input class="inv-input" id="staleDays" type="number" min="1" step="1" value="30"></div>
+                        </div>
+                        <p class="inv-muted">When MeshCentral auto-removal is off, the default threshold is 30 days. Missing nodes still require review.</p>
+                        <div class="inv-field">
+                            <label for="ignoredUsers">Ignored sign-in accounts (one per line)</label>
+                            <textarea class="inv-textarea" id="ignoredUsers" rows="4" placeholder="serviceaccount&#10;Administrator@example.test"></textarea>
+                            <span class="inv-muted">A plain username matches that name in any domain or UPN. A qualified name matches only the exact account. Ignored accounts are excluded from automatic assignment and signed-in user review.</span>
+                        </div>
+                        <p class="inv-review" id="settingsWarning"></p>
+                        <div class="inv-hidden" id="backupControls">
+                            <hr>
+                            <h3>Full Inventory backup</h3>
+                            <p class="inv-muted">Download every Inventory record, including workstations, peripherals, archived records, settings, migration state, and preservation copies. MeshCentral nodes, users, and server settings are not included.</p>
+                            <div class="inv-actions">
+                                <button class="inv-button" id="downloadBackupButton" type="button">Download backup</button>
+                                <button class="inv-button" id="restoreBackupButton" type="button">Restore backup</button>
+                                <input id="restoreBackupInput" class="inv-hidden" type="file" accept=".json,application/json">
+                            </div>
+                            <p class="inv-muted">Restoring replaces all Inventory-owned records across every domain. The backup is fully validated before any database changes are made.</p>
+                        </div>
+                    </section>
                 </div>
-                <p class="inv-muted">Restoring replaces all Inventory-owned records across every domain. The backup is fully validated before any database changes are made.</p>
+                <div class="inv-modal-footer">
+                    <button class="inv-button" id="cancelSettings" type="button">Close</button>
+                    <button class="inv-button primary" id="saveSettings" type="button">Save settings</button>
+                </div>
             </div>
-        </section>
+        </div>
 
         <div class="inv-grid" id="summaryCards"></div>
 
@@ -1395,6 +1407,18 @@
         downloadCsv('peripheral-import-template.csv', [peripheralCsvFields]);
     }
 
+    function openSettingsModal() {
+        state.modalTrigger = byId('dashboardMoreMenu').querySelector('summary');
+        byId('settingsModal').classList.remove('inv-hidden');
+        byId('staleMode').focus();
+    }
+
+    function closeSettingsModal() {
+        byId('settingsModal').classList.add('inv-hidden');
+        if (state.modalTrigger && state.modalTrigger.focus) state.modalTrigger.focus();
+        state.modalTrigger = null;
+    }
+
     function resetWorkstationForm() {
         ['addWorkstationName', 'addWorkstationAssetTag', 'addWorkstationSerial', 'addWorkstationUuid', 'addWorkstationManufacturer', 'addWorkstationModel', 'addWorkstationOs', 'addWorkstationUser', 'addWorkstationLocation', 'addWorkstationPurchaseDate', 'addWorkstationWarrantyEnd', 'addWorkstationNotes'].forEach(function (id) { byId(id).value = ''; });
         byId('addWorkstationStatus').value = 'Available';
@@ -1699,6 +1723,7 @@
         } else if (result.kind === 'settings') {
             state.settings = result.settings;
             byId('settingsWarning').textContent = result.settingsWarning || '';
+            closeSettingsModal();
             showToast('Inventory settings saved.');
             send('list', {});
         } else if (result.kind === 'backup') {
@@ -1764,7 +1789,9 @@
         byId('deleteButton').addEventListener('click', function () { byId('detailMoreMenu').open = false; deleteAsset(); });
         byId('exportButton').addEventListener('click', function () { byId('dashboardMoreMenu').open = false; exportCsv(); });
         byId('rescanButton').addEventListener('click', function () { send('rescan', {}); });
-        byId('settingsButton').addEventListener('click', function () { byId('dashboardMoreMenu').open = false; byId('settingsPanel').classList.toggle('inv-hidden'); });
+        byId('settingsButton').addEventListener('click', function () { byId('dashboardMoreMenu').open = false; openSettingsModal(); });
+        byId('closeSettingsModal').addEventListener('click', closeSettingsModal);
+        byId('cancelSettings').addEventListener('click', closeSettingsModal);
         byId('saveSettings').addEventListener('click', function () {
             send('settings-update', { settings: {
                 mode: byId('staleMode').value,
@@ -1822,6 +1849,7 @@
                     if (modal.id === 'workstationModal') closeWorkstationModal();
                     else if (modal.id === 'peripheralModal') closePeripheralModal();
                     else if (modal.id === 'importModal') closeImportModal();
+                    else if (modal.id === 'settingsModal') closeSettingsModal();
                 } else {
                     byId('dashboardMoreMenu').open = false;
                     byId('detailMoreMenu').open = false;
@@ -1850,7 +1878,7 @@
         receive: receive,
         refresh: function () { send('list', {}); },
         showDashboard: function () {
-            byId('settingsPanel').classList.add('inv-hidden');
+            byId('settingsModal').classList.add('inv-hidden');
             if (state.selected) return requestCloseDetail();
             else {
                 setAssetUrl('');
