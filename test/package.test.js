@@ -1260,7 +1260,7 @@ test('dashboard search is limited to asset name and assigned user', () => {
     assert.match(view, /Search device or assigned user/);
 });
 
-test('dashboard actions share the inventory tab row and unchanged saves stop in the browser', () => {
+test('dashboard actions share the inventory tab row and detail saves track dirty state in the browser', () => {
     const view = fs.readFileSync(path.join(__dirname, '..', 'views', 'inventory.handlebars'), 'utf8');
     const tabbarStart = view.indexOf('<div class="inv-tabbar">');
     const settingsStart = view.indexOf('<section class="inv-section inv-hidden" id="settingsPanel">');
@@ -1272,7 +1272,10 @@ test('dashboard actions share the inventory tab row and unchanged saves stop in 
     }
     assert.doesNotMatch(view, /inv-dashboard-actions/);
     assert.match(view, /No changes to save\./);
-    assert.match(view, /Object\.keys\(changes\)\.some/);
+    assert.match(view, /function updateDetailDirty\(\)/);
+    assert.match(view, /JSON\.stringify\(detailFormValue\(\)\) !== state\.detailBaseline/);
+    assert.match(view, /id="saveButton"[^>]*disabled/);
+    assert.match(view, /id="revertButton"[^>]*disabled/);
     assert.match(view, /id="downloadBackupButton"/);
     assert.match(view, /id="restoreBackupButton"/);
     assert.match(view, /new Blob\(\[text\]/);

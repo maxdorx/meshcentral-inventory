@@ -39,6 +39,11 @@
             font-size: 14px;
         }
         button, input, select, textarea { font: inherit; }
+        button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible,
+        summary:focus-visible, [tabindex]:focus-visible {
+            outline: 2px solid var(--inv-accent); outline-offset: 2px;
+        }
+        .inv-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
         .inv-shell, .inv-shell h1, .inv-shell h2, .inv-shell h3,
         .inv-shell table, .inv-shell th, .inv-shell td, .inv-shell dt, .inv-shell dd,
         .inv-shell label, .inv-shell button, .inv-shell input, .inv-shell select,
@@ -53,32 +58,32 @@
         .inv-header { display: flex; gap: 16px; justify-content: space-between; align-items: center; margin-bottom: 14px; }
         .inv-title { margin: 0; font-size: 26px; font-weight: 650; }
         .inv-subtitle { color: var(--inv-muted); margin-top: 3px; }
-        .inv-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .inv-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
         .inv-button {
             border: 1px solid var(--inv-border); border-radius: 5px; padding: 7px 12px;
             background: var(--bs-secondary-bg, #343a40); color: inherit; cursor: pointer;
         }
-        .inv-button:hover { filter: brightness(1.12); }
+        .inv-button:hover { filter: brightness(1.08); }
         .inv-button.primary { background: var(--inv-accent); border-color: var(--inv-accent); color: #fff; }
         .inv-button.danger { background: var(--bs-danger, #b02a37); border-color: var(--bs-danger, #b02a37); color: #fff; }
         .inv-button.small { padding: 4px 8px; font-size: 12px; }
         .inv-button:disabled { cursor: not-allowed; opacity: .55; }
         .inv-hidden { display: none !important; }
-        .inv-tabbar { display: flex; gap: 16px; align-items: flex-end; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid var(--inv-border); }
+        .inv-tabbar { display: flex; gap: 16px; align-items: flex-end; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid var(--inv-border); }
         .inv-tabs { display: flex; gap: 4px; flex: 0 0 auto; }
         .inv-tabbar .inv-actions { justify-content: flex-end; padding-bottom: 5px; }
         .inv-tab { border: 0; border-bottom: 3px solid transparent; padding: 9px 15px; background: transparent; color: var(--inv-fg, #e8e8e8) !important; cursor: pointer; font-weight: 650; }
         .inv-tab.active { border-bottom-color: var(--inv-accent); color: var(--inv-accent) !important; }
-        .inv-grid { display: grid; grid-template-columns: repeat(6, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px; }
-        .inv-card { border: 1px solid var(--inv-border); border-radius: 7px; background: var(--inv-surface); padding: 13px; color: inherit; text-align: left; cursor: pointer; }
-        .inv-card:hover { border-color: var(--inv-accent); }
-        .inv-card.active { border-color: var(--inv-accent); box-shadow: inset 0 0 0 1px var(--inv-accent); }
-        .inv-card-label { color: var(--inv-muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-        .inv-card-value { margin-top: 5px; font-size: 25px; font-weight: 700; }
+        .inv-grid { display: flex; flex-wrap: wrap; align-items: stretch; gap: 4px; margin-bottom: 14px; padding: 4px; border: 1px solid var(--inv-border); border-radius: 10px; background: var(--inv-surface); }
+        .inv-card { flex: 1 1 140px; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-height: 48px; border: 0; border-radius: 7px; background: transparent; padding: 9px 11px; color: inherit; text-align: left; cursor: pointer; }
+        .inv-card:hover { background: rgba(64, 160, 210, .1); }
+        .inv-card.active { background: rgba(64, 160, 210, .14); }
+        .inv-card.attention .inv-card-value { color: var(--bs-warning-text-emphasis, #ffda6a); }
+        .inv-card-label { color: var(--inv-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .035em; }
+        .inv-card-value { margin: 0; font-size: 20px; font-weight: 700; }
         .inv-toolbar {
             display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
-            margin-right: calc(0px - var(--inv-gutter)); margin-left: calc(0px - var(--inv-gutter));
-            padding: 10px var(--inv-gutter); border: 1px solid var(--inv-border); border-right: 0; border-left: 0;
+            padding: 10px; border: 1px solid var(--inv-border); border-radius: 10px 10px 0 0; background: var(--inv-surface);
         }
         .inv-toolbar-spacer { flex: 1 1 auto; }
         .inv-pagination { display: flex; align-items: center; gap: 6px; }
@@ -90,16 +95,16 @@
         .inv-textarea { min-height: 95px; resize: vertical; width: 100%; }
         .inv-table-wrap {
             flex: 1 1 auto; min-height: 180px;
-            margin-right: calc(0px - var(--inv-gutter)); margin-left: calc(0px - var(--inv-gutter));
-            border-top: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable;
+            border: 1px solid var(--inv-border); border-top: 0; border-radius: 0 0 10px 10px; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable;
         }
-        .inv-table { width: 100%; border-collapse: collapse; min-width: 1050px; }
+        .inv-table { width: 100%; border-collapse: collapse; min-width: 760px; }
         .inv-table th { position: sticky; top: 0; z-index: 1; background: var(--bs-secondary-bg, #333); text-align: left; padding: 7px 9px; white-space: nowrap; }
         .inv-table td { border-top: 1px solid var(--inv-border); padding: 6px 9px; vertical-align: middle; }
         .inv-table th:first-child, .inv-table td:first-child { padding-left: var(--inv-gutter); }
         .inv-table th:last-child, .inv-table td:last-child { padding-right: var(--inv-gutter); }
         .inv-table tbody tr { cursor: pointer; }
         .inv-table tbody tr:hover { background: rgba(64, 160, 210, .12); }
+        .inv-table tbody tr:focus-visible { outline: 2px solid var(--inv-accent); outline-offset: -2px; background: rgba(64, 160, 210, .12); }
         .inv-device-cell { min-width: 140px; }
         .inv-device, .inv-device-cell .inv-muted { font-weight: 650; white-space: nowrap; }
         .inv-device-cell .inv-muted { font-weight: 400; }
@@ -110,6 +115,9 @@
         .inv-badge.available, .inv-badge.discovered { background: rgba(13, 110, 253, .18); color: var(--bs-info-text-emphasis, #6edff6); }
         .inv-badge.in-repair { background: rgba(255, 193, 7, .18); color: var(--bs-warning-text-emphasis, #ffda6a); }
         .inv-badge.retired, .inv-badge.lost-stolen { background: rgba(220, 53, 69, .17); color: var(--bs-danger-text-emphasis, #ea868f); }
+        .inv-presence { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+        .inv-presence::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 18%, transparent); }
+        .inv-review-badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 3px 8px; background: rgba(255, 193, 7, .14); color: var(--bs-warning-text-emphasis, #ffda6a); font-size: 12px; font-weight: 650; }
         .inv-review { color: var(--bs-warning, #ffc107); font-weight: 650; }
         .inv-empty { padding: 42px 16px; text-align: center; color: var(--inv-muted); }
         .inv-loading { opacity: .65; pointer-events: none; }
@@ -118,9 +126,12 @@
             display: block; height: 100%; overflow: auto; overscroll-behavior: contain;
             margin-right: calc(0px - var(--inv-gutter)); padding-right: var(--inv-gutter); padding-bottom: 16px;
         }
+        .inv-detail > .inv-header { position: sticky; top: 0; z-index: 5; margin: 0 0 14px; padding: 10px 0 12px; background: var(--bs-body-bg, #1f1f1f); border-bottom: 1px solid var(--inv-border); }
+        .inv-back { display: inline-flex; margin-bottom: 7px; border: 0; padding: 0; background: transparent; color: var(--inv-muted) !important; cursor: pointer; }
+        .inv-back:hover { color: var(--inv-accent) !important; }
         .inv-dashboard.hidden { display: none; }
         .inv-detail-grid { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr); gap: 12px; }
-        .inv-section { border: 1px solid var(--inv-border); border-radius: 7px; background: var(--inv-surface); padding: 14px; margin-bottom: 12px; }
+        .inv-section { border: 1px solid color-mix(in srgb, var(--inv-border) 75%, transparent); border-radius: 10px; background: var(--inv-surface); padding: 16px; margin-bottom: 12px; }
         .inv-section h2 { font-size: 17px; margin: 0 0 12px; }
         .inv-section h3 { font-size: 14px; margin: 0 0 8px; }
         .inv-fields { display: grid; grid-template-columns: 150px 1fr; gap: 8px 12px; align-items: start; }
@@ -133,15 +144,29 @@
         .inv-user { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-top: 1px solid var(--inv-border); }
         .inv-user:first-of-type { border-top: 0; }
         .inv-user-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+        .inv-more { position: relative; }
+        .inv-more > summary { list-style: none; }
+        .inv-more > summary::-webkit-details-marker { display: none; }
+        .inv-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 12; min-width: 205px; padding: 6px; border: 1px solid var(--inv-border); border-radius: 9px; background: var(--bs-body-bg, #202124); box-shadow: 0 12px 32px rgba(0,0,0,.35); }
+        .inv-menu .inv-button { display: block; width: 100%; border: 0; background: transparent; padding: 9px 10px; text-align: left; }
+        .inv-menu .inv-button:hover { background: var(--inv-surface); filter: none; }
+        .inv-menu .inv-button.danger { color: var(--bs-danger-text-emphasis, #ea868f) !important; }
+        .inv-form-group { padding: 14px; border: 1px solid color-mix(in srgb, var(--inv-border) 72%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--inv-surface) 72%, transparent); }
+        .inv-form-group + .inv-form-group { margin-top: 12px; }
+        .inv-form-group h3 { margin: 0 0 4px; font-size: 15px; }
+        .inv-form-group > summary { cursor: pointer; font-size: 15px; font-weight: 650; }
+        .inv-form-group[open] > summary { margin-bottom: 4px; }
+        .inv-form-group-description { margin: 0 0 12px; color: var(--inv-muted); font-size: 12px; }
         .inv-history { max-height: none; overflow: visible; }
         .inv-history-item { border-left: 2px solid var(--inv-accent); padding: 2px 0 10px 10px; margin-left: 4px; }
         .inv-history-action { font-weight: 650; }
         .inv-toast { position: fixed; right: 18px; bottom: 18px; max-width: 440px; padding: 11px 14px; border-radius: 6px; background: #222; color: #fff; box-shadow: 0 4px 22px rgba(0,0,0,.35); display: none; z-index: 20; }
         .inv-toast.error { background: #842029; }
         .inv-modal-backdrop { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(0,0,0,.68); }
-        .inv-modal { width: min(900px, 100%); max-height: calc(100vh - 40px); overflow: auto; border: 1px solid var(--inv-border); border-radius: 8px; background: var(--bs-body-bg, #202124); color: inherit; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+        .inv-modal { width: min(920px, 100%); max-height: calc(100vh - 40px); overflow: auto; border: 1px solid var(--inv-border); border-radius: 12px; background: var(--bs-body-bg, #202124); color: inherit; box-shadow: 0 16px 50px rgba(0,0,0,.5); }
         .inv-modal-header, .inv-modal-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--inv-border); }
-        .inv-modal-footer { justify-content: flex-end; border-top: 1px solid var(--inv-border); border-bottom: 0; }
+        .inv-modal-header { position: sticky; top: 0; z-index: 2; background: var(--bs-body-bg, #202124); }
+        .inv-modal-footer { position: sticky; bottom: 0; z-index: 2; justify-content: flex-end; border-top: 1px solid var(--inv-border); border-bottom: 0; background: var(--bs-body-bg, #202124); }
         .inv-modal-body { padding: 16px; }
         .inv-modal h2 { margin: 0; font-size: 19px; }
         .inv-close { border: 0; background: transparent; color: inherit; font-size: 24px; cursor: pointer; }
@@ -155,17 +180,23 @@
         .inv-offline { color: var(--inv-muted); }
         @media (max-width: 1100px) {
             .inv-tabbar { align-items: flex-start; flex-wrap: wrap; }
-            .inv-grid { grid-template-columns: repeat(3, 1fr); }
             .inv-detail-grid { grid-template-columns: 1fr; }
         }
         @media (max-width: 650px) {
             :root { --inv-gutter: 10px; }
             body { padding-top: 10px; }
             .inv-header { align-items: flex-start; flex-direction: column; }
-            .inv-grid { grid-template-columns: repeat(2, 1fr); }
+            .inv-card { flex-basis: calc(50% - 4px); }
             .inv-form-grid { grid-template-columns: 1fr; }
             .inv-field.full { grid-column: auto; }
             .inv-fields { grid-template-columns: 115px 1fr; }
+            .inv-table { min-width: 0; }
+            .inv-table th:nth-child(4), .inv-table td:nth-child(4),
+            .inv-table th:nth-child(5), .inv-table td:nth-child(5) { display: none; }
+            .inv-tabbar .inv-actions { width: 100%; }
+            .inv-tabbar .inv-actions > .primary { margin-left: auto; }
+            .inv-modal-backdrop { padding: 8px; }
+            .inv-modal { max-height: calc(100vh - 16px); }
         }
     </style>
 </head>
@@ -173,17 +204,22 @@
 <div class="inv-shell" id="inventoryRoot">
     <section class="inv-dashboard" id="dashboard">
         <div class="inv-tabbar">
-            <nav class="inv-tabs" id="inventoryTabs" aria-label="Inventory type">
-                <button class="inv-tab active" id="workstationsTab" type="button">Workstations</button>
-                <button class="inv-tab" id="peripheralsTab" type="button">Peripherals</button>
+            <nav class="inv-tabs" id="inventoryTabs" role="tablist" aria-label="Inventory type">
+                <button class="inv-tab active" id="workstationsTab" type="button" role="tab" aria-selected="true">Workstations</button>
+                <button class="inv-tab" id="peripheralsTab" type="button" role="tab" aria-selected="false">Peripherals</button>
             </nav>
             <div class="inv-actions">
-                <button class="inv-button" id="exportButton" type="button">Export CSV</button>
-                <button class="inv-button primary" id="rescanButton" type="button">Synchronize</button>
-                <button class="inv-button" id="settingsButton" type="button">Inventory settings</button>
+                <button class="inv-button" id="rescanButton" type="button">Synchronize</button>
+                <details class="inv-more" id="dashboardMoreMenu">
+                    <summary class="inv-button" aria-label="More inventory actions">More ▾</summary>
+                    <div class="inv-menu" role="menu">
+                        <button class="inv-button" id="exportButton" type="button" role="menuitem">Export CSV</button>
+                        <button class="inv-button" id="templateButton" type="button" role="menuitem">Download CSV template</button>
+                        <button class="inv-button" id="importButton" type="button" role="menuitem">Import CSV</button>
+                        <button class="inv-button" id="settingsButton" type="button" role="menuitem">Inventory settings</button>
+                    </div>
+                </details>
                 <button class="inv-button primary" id="addWorkstationButton" type="button">Add workstation</button>
-                <button class="inv-button" id="templateButton" type="button">Download CSV template</button>
-                <button class="inv-button" id="importButton" type="button">Import CSV</button>
                 <button class="inv-button primary" id="addPeripheralButton" type="button">Add peripheral</button>
                 <input id="importFileInput" class="inv-hidden" type="file" accept=".csv,text/csv">
             </div>
@@ -253,6 +289,7 @@
 
         <div class="inv-table-wrap">
             <table class="inv-table">
+                <caption class="inv-sr-only" id="inventoryTableCaption">Workstation inventory</caption>
                 <thead id="assetHead"><tr>
                     <th>Device</th><th>Status</th><th>Assignee</th><th>Serial</th><th>UUID</th>
                     <th>Model</th><th>Location</th><th>Agent</th><th>Review</th>
@@ -266,13 +303,20 @@
     <section class="inv-detail" id="detail">
         <header class="inv-header">
             <div>
+                <button class="inv-back" id="backToInventoryButton" type="button">← Inventory</button>
                 <h1 class="inv-title" id="detailTitle">Asset</h1>
                 <div class="inv-subtitle" id="detailSubtitle"></div>
             </div>
             <div class="inv-actions">
+                <button class="inv-button" id="revertButton" type="button" disabled>Revert</button>
                 <button class="inv-button" id="openDeviceButton" type="button">Open device</button>
-                <button class="inv-button danger" id="deleteButton" type="button">Delete inventory record</button>
-                <button class="inv-button primary" id="saveButton" type="button">Save changes</button>
+                <details class="inv-more" id="detailMoreMenu">
+                    <summary class="inv-button" aria-label="More asset actions">More ▾</summary>
+                    <div class="inv-menu" role="menu">
+                        <button class="inv-button danger" id="deleteButton" type="button" role="menuitem">Delete inventory record</button>
+                    </div>
+                </details>
+                <button class="inv-button primary" id="saveButton" type="button" disabled>Save changes</button>
             </div>
         </header>
 
@@ -337,27 +381,45 @@
         </div>
     </section>
 </div>
-<div class="inv-toast" id="toast"></div>
+<div class="inv-toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <div class="inv-modal-backdrop inv-hidden" id="workstationModal">
     <div class="inv-modal" role="dialog" aria-modal="true" aria-labelledby="workstationModalTitle">
         <div class="inv-modal-header"><h2 id="workstationModalTitle">Add workstation</h2><button class="inv-close" id="closeWorkstationModal" type="button" aria-label="Close">×</button></div>
         <div class="inv-modal-body">
-            <div class="inv-form-grid">
-                <div class="inv-field"><label for="addWorkstationName">Name *</label><input class="inv-input" id="addWorkstationName" maxlength="256"></div>
-                <div class="inv-field"><label for="addWorkstationAssetTag">Asset tag</label><input class="inv-input" id="addWorkstationAssetTag" maxlength="128"></div>
-                <div class="inv-field"><label for="addWorkstationSerial">Serial number</label><input class="inv-input" id="addWorkstationSerial" maxlength="128"></div>
-                <div class="inv-field"><label for="addWorkstationUuid">UUID</label><input class="inv-input" id="addWorkstationUuid" maxlength="128"></div>
-                <div class="inv-field"><label for="addWorkstationManufacturer">Manufacturer</label><input class="inv-input" id="addWorkstationManufacturer" maxlength="256"></div>
-                <div class="inv-field"><label for="addWorkstationModel">Model</label><input class="inv-input" id="addWorkstationModel" maxlength="256"></div>
-                <div class="inv-field"><label for="addWorkstationOs">Operating system</label><input class="inv-input" id="addWorkstationOs" maxlength="512"></div>
-                <div class="inv-field"><label for="addWorkstationUser">Assigned user</label><input class="inv-input" id="addWorkstationUser" maxlength="256" placeholder="Name or email"></div>
-                <div class="inv-field"><label for="addWorkstationStatus">Status</label><select class="inv-select" id="addWorkstationStatus"></select></div>
-                <div class="inv-field"><label for="addWorkstationLocation">Location</label><input class="inv-input" id="addWorkstationLocation" maxlength="256"></div>
-                <div class="inv-field"><label for="addWorkstationPurchaseDate">Purchase date</label><input class="inv-input" id="addWorkstationPurchaseDate" type="date"></div>
-                <div class="inv-field"><label for="addWorkstationWarrantyEnd">Warranty end</label><input class="inv-input" id="addWorkstationWarrantyEnd" type="date"></div>
-                <div class="inv-field full"><label for="addWorkstationNotes">Notes</label><textarea class="inv-textarea" id="addWorkstationNotes" maxlength="4000"></textarea></div>
+            <div class="inv-form-group">
+                <h3>Basics</h3><p class="inv-form-group-description">Identify the workstation in inventory.</p>
+                <div class="inv-form-grid">
+                    <div class="inv-field"><label for="addWorkstationName">Name *</label><input class="inv-input" id="addWorkstationName" maxlength="256" required></div>
+                    <div class="inv-field"><label for="addWorkstationAssetTag">Asset tag</label><input class="inv-input" id="addWorkstationAssetTag" maxlength="128"></div>
+                    <div class="inv-field"><label for="addWorkstationSerial">Serial number</label><input class="inv-input" id="addWorkstationSerial" maxlength="128"></div>
+                    <div class="inv-field"><label for="addWorkstationUuid">UUID</label><input class="inv-input" id="addWorkstationUuid" maxlength="128"></div>
+                </div>
             </div>
+            <div class="inv-form-group">
+                <h3>Assignment</h3><p class="inv-form-group-description">Set ownership and the current lifecycle state.</p>
+                <div class="inv-form-grid">
+                    <div class="inv-field"><label for="addWorkstationUser">Assigned user</label><input class="inv-input" id="addWorkstationUser" maxlength="256" placeholder="Name or email"></div>
+                    <div class="inv-field"><label for="addWorkstationStatus">Status</label><select class="inv-select" id="addWorkstationStatus"></select></div>
+                    <div class="inv-field full"><label for="addWorkstationLocation">Location</label><input class="inv-input" id="addWorkstationLocation" maxlength="256"></div>
+                </div>
+            </div>
+            <details class="inv-form-group">
+                <summary>Hardware details</summary><p class="inv-form-group-description">Optional descriptive information for a manual workstation.</p>
+                <div class="inv-form-grid">
+                    <div class="inv-field"><label for="addWorkstationManufacturer">Manufacturer</label><input class="inv-input" id="addWorkstationManufacturer" maxlength="256"></div>
+                    <div class="inv-field"><label for="addWorkstationModel">Model</label><input class="inv-input" id="addWorkstationModel" maxlength="256"></div>
+                    <div class="inv-field full"><label for="addWorkstationOs">Operating system</label><input class="inv-input" id="addWorkstationOs" maxlength="512"></div>
+                </div>
+            </details>
+            <details class="inv-form-group">
+                <summary>Purchase details</summary><p class="inv-form-group-description">Optional dates and internal notes.</p>
+                <div class="inv-form-grid">
+                    <div class="inv-field"><label for="addWorkstationPurchaseDate">Purchase date</label><input class="inv-input" id="addWorkstationPurchaseDate" type="date"></div>
+                    <div class="inv-field"><label for="addWorkstationWarrantyEnd">Warranty end</label><input class="inv-input" id="addWorkstationWarrantyEnd" type="date"></div>
+                    <div class="inv-field full"><label for="addWorkstationNotes">Notes</label><textarea class="inv-textarea" id="addWorkstationNotes" maxlength="4000"></textarea></div>
+                </div>
+            </details>
         </div>
         <div class="inv-modal-footer">
             <button class="inv-button" id="cancelWorkstation" type="button">Cancel</button>
@@ -370,21 +432,34 @@
     <div class="inv-modal" role="dialog" aria-modal="true" aria-labelledby="peripheralModalTitle">
         <div class="inv-modal-header"><h2 id="peripheralModalTitle">Add peripheral</h2><button class="inv-close" id="closePeripheralModal" type="button" aria-label="Close">×</button></div>
         <div class="inv-modal-body">
-            <div class="inv-form-grid">
-                <div class="inv-field"><label for="addType">Type *</label><select class="inv-select" id="addType"></select></div>
-                <div class="inv-field"><label for="addName">Name</label><input class="inv-input" id="addName" maxlength="256" placeholder="Defaults to manufacturer/model or type"></div>
-                <div class="inv-field"><label for="addAssetTag">Asset tag</label><input class="inv-input" id="addAssetTag" maxlength="128"></div>
-                <div class="inv-field"><label for="addSerial">Serial number</label><input class="inv-input" id="addSerial" maxlength="128"></div>
-                <div class="inv-field"><label for="addManufacturer">Manufacturer</label><input class="inv-input" id="addManufacturer" maxlength="256"></div>
-                <div class="inv-field"><label for="addModel">Model</label><input class="inv-input" id="addModel" maxlength="256"></div>
-                <div class="inv-field"><label for="addAssignedUser">Assigned user</label><input class="inv-input" id="addAssignedUser" maxlength="256" placeholder="Name or email"></div>
-                <div class="inv-field"><label for="addWorkstation">Linked workstation</label><select class="inv-select" id="addWorkstation"><option value="">No linked workstation</option></select></div>
-                <div class="inv-field"><label for="addStatus">Status</label><select class="inv-select" id="addStatus"></select></div>
-                <div class="inv-field"><label for="addLocation">Location</label><input class="inv-input" id="addLocation" maxlength="256"></div>
-                <div class="inv-field"><label for="addPurchaseDate">Purchase date</label><input class="inv-input" id="addPurchaseDate" type="date"></div>
-                <div class="inv-field"><label for="addWarrantyEnd">Warranty end</label><input class="inv-input" id="addWarrantyEnd" type="date"></div>
-                <div class="inv-field full"><label for="addNotes">Notes</label><textarea class="inv-textarea" id="addNotes" maxlength="4000"></textarea></div>
+            <div class="inv-form-group">
+                <h3>Basics</h3><p class="inv-form-group-description">Identify the peripheral in inventory.</p>
+                <div class="inv-form-grid">
+                    <div class="inv-field"><label for="addType">Type *</label><select class="inv-select" id="addType" required></select></div>
+                    <div class="inv-field"><label for="addName">Name</label><input class="inv-input" id="addName" maxlength="256" placeholder="Defaults to manufacturer/model or type"></div>
+                    <div class="inv-field"><label for="addAssetTag">Asset tag</label><input class="inv-input" id="addAssetTag" maxlength="128"></div>
+                    <div class="inv-field"><label for="addSerial">Serial number</label><input class="inv-input" id="addSerial" maxlength="128"></div>
+                    <div class="inv-field"><label for="addManufacturer">Manufacturer</label><input class="inv-input" id="addManufacturer" maxlength="256"></div>
+                    <div class="inv-field"><label for="addModel">Model</label><input class="inv-input" id="addModel" maxlength="256"></div>
+                </div>
             </div>
+            <div class="inv-form-group">
+                <h3>Assignment</h3><p class="inv-form-group-description">Connect the peripheral to a person or workstation.</p>
+                <div class="inv-form-grid">
+                    <div class="inv-field"><label for="addAssignedUser">Assigned user</label><input class="inv-input" id="addAssignedUser" maxlength="256" placeholder="Name or email"></div>
+                    <div class="inv-field"><label for="addStatus">Status</label><select class="inv-select" id="addStatus"></select></div>
+                    <div class="inv-field full"><label for="addWorkstation">Linked workstation</label><select class="inv-select" id="addWorkstation"><option value="">No linked workstation</option></select></div>
+                    <div class="inv-field full"><label for="addLocation">Location</label><input class="inv-input" id="addLocation" maxlength="256"></div>
+                </div>
+            </div>
+            <details class="inv-form-group">
+                <summary>Purchase details</summary><p class="inv-form-group-description">Optional dates and internal notes.</p>
+                <div class="inv-form-grid">
+                    <div class="inv-field"><label for="addPurchaseDate">Purchase date</label><input class="inv-input" id="addPurchaseDate" type="date"></div>
+                    <div class="inv-field"><label for="addWarrantyEnd">Warranty end</label><input class="inv-input" id="addWarrantyEnd" type="date"></div>
+                    <div class="inv-field full"><label for="addNotes">Notes</label><textarea class="inv-textarea" id="addNotes" maxlength="4000"></textarea></div>
+                </div>
+            </details>
         </div>
         <div class="inv-modal-footer">
             <button class="inv-button" id="cancelPeripheral" type="button">Cancel</button>
@@ -418,7 +493,8 @@
         assets: [], selected: null, permissions: boot.permissions || [], loading: false,
         cardFilter: '', pendingListRequestId: '', pendingRequests: {}, requestedAssetId: '', activeTab: 'workstations',
         peripheralTypes: boot.peripheralTypes || ['Mouse', 'Keyboard', 'Headset', 'Monitor', 'Other'], capabilities: {},
-        importRows: [], importPreview: [], keepAddAnother: false, page: 1, pageSize: 25, settings: null
+        importRows: [], importPreview: [], keepAddAnother: false, page: 1, pageSize: 25, settings: null,
+        detailBaseline: '', detailDirty: false, modalTrigger: null
     };
     var requestCounter = 0;
     var frameRequestPrefix = (boot.mode === 'device' ? 'device' : 'dashboard') + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
@@ -580,10 +656,11 @@
         state.page = 1;
         byId('workstationsTab').classList.toggle('active', state.activeTab === 'workstations');
         byId('peripheralsTab').classList.toggle('active', state.activeTab === 'peripherals');
+        byId('workstationsTab').setAttribute('aria-selected', state.activeTab === 'workstations' ? 'true' : 'false');
+        byId('peripheralsTab').setAttribute('aria-selected', state.activeTab === 'peripherals' ? 'true' : 'false');
         var peripherals = state.activeTab === 'peripherals';
         byId('rescanButton').classList.toggle('inv-hidden', peripherals || !can('can_sync'));
-        byId('settingsButton').classList.toggle('inv-hidden', peripherals || !state.capabilities.canCreateManualWorkstation || !can('can_manage'));
-        if (peripherals) byId('settingsPanel').classList.add('inv-hidden');
+        byId('settingsButton').classList.toggle('inv-hidden', !state.capabilities.canCreateManualWorkstation || !can('can_manage'));
         byId('addWorkstationButton').classList.toggle('inv-hidden', peripherals || !can('can_manage') || !state.capabilities.canCreateManualWorkstation);
         byId('templateButton').classList.toggle('inv-hidden', !peripherals || !can('can_manage'));
         byId('importButton').classList.toggle('inv-hidden', !peripherals || !can('can_manage'));
@@ -592,6 +669,7 @@
         byId('presenceFilter').classList.toggle('inv-hidden', peripherals);
         byId('typeFilter').classList.toggle('inv-hidden', !peripherals);
         byId('searchInput').placeholder = peripherals ? 'Search peripheral or assigned user…' : 'Search device or assigned user…';
+        byId('inventoryTableCaption').textContent = peripherals ? 'Peripheral inventory' : 'Workstation inventory';
         byId('reviewFilter').value = '';
         byId('presenceFilter').value = '';
         byId('typeFilter').value = '';
@@ -743,7 +821,7 @@
         clear(container);
         cards.forEach(function (item) {
             var active = (item[2] === 'all' && !state.cardFilter) || state.cardFilter === item[2];
-            var card = node('button', 'inv-card' + (active ? ' active' : ''));
+            var card = node('button', 'inv-card' + (active ? ' active' : '') + (item[2] === 'review' && item[1] > 0 ? ' attention' : ''));
             card.type = 'button';
             card.setAttribute('aria-pressed', active ? 'true' : 'false');
             card.addEventListener('click', function () { selectCardFilter(item[2]); });
@@ -798,9 +876,13 @@
         clear(head);
         var header = document.createElement('tr');
         var headings = state.activeTab === 'peripherals'
-            ? ['Type', 'Peripheral', 'Status', 'Assignee', 'Asset tag', 'Serial', 'Manufacturer / model', 'Linked workstation', 'Location']
-            : ['Device', 'Status', 'Assignee', 'Serial', 'UUID', 'Model', 'Location', 'Agent', 'Review'];
-        headings.forEach(function (heading) { header.appendChild(node('th', '', heading)); });
+            ? ['Peripheral', 'Status', 'Assignee', 'Asset tag', 'Linked workstation', 'Location']
+            : ['Device', 'Status', 'Assignee', 'Location', 'Agent', 'Review'];
+        headings.forEach(function (heading) {
+            var cell = node('th', '', heading);
+            cell.setAttribute('scope', 'col');
+            header.appendChild(cell);
+        });
         head.appendChild(header);
         byId('resultCount').textContent = filtered.length ? ((start + 1) + '–' + (start + assets.length) + ' of ' + filtered.length) : '0 results';
         byId('previousPage').disabled = state.page <= 1;
@@ -811,21 +893,27 @@
         assets.forEach(function (asset) {
             var row = document.createElement('tr');
             row.addEventListener('click', function () { openAsset(asset.id); });
+            row.tabIndex = 0;
+            row.setAttribute('role', 'link');
+            row.setAttribute('aria-label', 'Open ' + value(asset.name, isPeripheral(asset) ? 'unnamed peripheral' : 'unnamed device'));
+            row.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openAsset(asset.id);
+                }
+            });
 
             if (state.activeTab === 'peripherals') {
-                row.appendChild(node('td', '', value(asset.peripheral && asset.peripheral.type, 'Other')));
                 var peripheralCell = document.createElement('td');
                 peripheralCell.className = 'inv-device-cell';
                 peripheralCell.appendChild(node('div', 'inv-device', asset.name || 'Unnamed peripheral'));
-                peripheralCell.appendChild(node('div', 'inv-muted', 'Manual · No agent'));
+                peripheralCell.appendChild(node('div', 'inv-muted', value(asset.peripheral && asset.peripheral.type, 'Other') + ' · Manual'));
                 row.appendChild(peripheralCell);
                 var peripheralStatus = document.createElement('td');
                 peripheralStatus.appendChild(node('span', 'inv-badge ' + statusClass(asset.status), asset.status));
                 row.appendChild(peripheralStatus);
                 row.appendChild(node('td', '', assignmentText(asset)));
                 row.appendChild(node('td', 'inv-mono', value(asset.manual && asset.manual.assetTag, '—')));
-                row.appendChild(node('td', 'inv-mono', value(asset.identity && asset.identity.serial, '—')));
-                row.appendChild(node('td', '', [value(asset.peripheral && asset.peripheral.manufacturer), value(asset.peripheral && asset.peripheral.model)].filter(Boolean).join(' ') || '—'));
                 row.appendChild(node('td', '', value(asset.links && asset.links.workstationName, '—')));
                 row.appendChild(node('td', '', value(asset.manual && asset.manual.location, '—')));
                 body.appendChild(row);
@@ -843,18 +931,21 @@
             statusCell.appendChild(node('span', 'inv-badge ' + statusClass(asset.status), asset.status));
             row.appendChild(statusCell);
             row.appendChild(node('td', '', assignmentText(asset)));
-            row.appendChild(node('td', 'inv-mono', value(asset.identity && asset.identity.serial, '—')));
-            row.appendChild(node('td', 'inv-mono', value(asset.identity && asset.identity.uuid, '—')));
-            var workstationHardware = isManualWorkstation(asset) ? (asset.manualHardware || {}) : (asset.automatic || {});
-            row.appendChild(node('td', '', [value(workstationHardware.manufacturer), value(workstationHardware.model)].filter(Boolean).join(' ') || '—'));
             row.appendChild(node('td', '', value(asset.manual && asset.manual.location, '—')));
             var agentCondition = isManualWorkstation(asset) ? 'No agent' : value(asset.automatic && asset.automatic.condition, asset.automatic && asset.automatic.nodeExists === false ? 'Node missing' : (asset.automatic && asset.automatic.online ? 'Online' : 'Offline'));
-            row.appendChild(node('td', agentCondition === 'Online' ? 'inv-online' : 'inv-offline', agentCondition));
+            var agentCell = document.createElement('td');
+            agentCell.appendChild(node('span', 'inv-presence ' + (agentCondition === 'Online' ? 'inv-online' : 'inv-offline'), agentCondition));
+            row.appendChild(agentCell);
             var reasons = reviewReasons(asset);
             var reviewCell = document.createElement('td');
             reviewCell.className = reasons.length ? 'inv-review' : 'inv-muted';
             if (reasons.length === 0) reviewCell.textContent = 'Clear';
-            else reasons.forEach(function (reason) { reviewCell.appendChild(node('div', 'inv-review', reason)); });
+            else {
+                var reviewLabel = reasons.length === 1 ? reasons[0] : reasons.length + ' issues';
+                var reviewBadge = node('span', 'inv-review-badge', reviewLabel);
+                reviewBadge.title = reasons.join('\n');
+                reviewCell.appendChild(reviewBadge);
+            }
             row.appendChild(reviewCell);
             body.appendChild(row);
         });
@@ -1015,6 +1106,19 @@
         var container = byId('historyList');
         clear(container);
         var history = (asset.history || []).slice().reverse();
+        var historyLabels = {
+            'asset.created': 'Asset created',
+            'peripheral.created': 'Peripheral created',
+            'assignment.initialized': 'Initial assignment',
+            'assignment.changed': 'Assignment changed',
+            'identity.conflict': 'Hardware identity conflict',
+            'node.missing': 'MeshCentral node missing',
+            'asset.updated': 'Inventory details updated'
+        };
+        function historyLabel(action) {
+            if (historyLabels[action]) return historyLabels[action];
+            return value(action, 'Inventory activity').replace(/[._-]+/g, ' ').replace(/\b\w/g, function (letter) { return letter.toUpperCase(); });
+        }
         if (!history.length) {
             container.appendChild(node('div', 'inv-muted', 'No audit events recorded.'));
             return;
@@ -1025,7 +1129,7 @@
             group.className = 'inv-history-item';
             var groupTitle = document.createElement('summary');
             groupTitle.className = 'inv-history-action';
-            groupTitle.textContent = 'identity.conflict · ' + conflictHistory.length + ' observations (expand)';
+            groupTitle.textContent = 'Hardware identity conflict · ' + conflictHistory.length + ' observations';
             group.appendChild(groupTitle);
             conflictHistory.forEach(function (entry) {
                 var nested = node('div', '', formatDate(entry.at) + ' · ' + value(entry.actor, 'system') + ' · ' + entry.details);
@@ -1037,7 +1141,7 @@
         }
         history.forEach(function (entry) {
             var item = node('div', 'inv-history-item');
-            item.appendChild(node('div', 'inv-history-action', entry.action));
+            item.appendChild(node('div', 'inv-history-action', historyLabel(entry.action)));
             item.appendChild(node('div', '', entry.details));
             item.appendChild(node('div', 'inv-muted', formatDate(entry.at) + ' · ' + value(entry.actor, 'system')));
             container.appendChild(item);
@@ -1128,6 +1232,9 @@
         var nodeMissing = asset.automatic && asset.automatic.nodeExists === false;
         byId('openDeviceButton').style.display = !peripheral && asset.nodeid && !nodeMissing ? '' : 'none';
         byId('deleteButton').style.display = can('can_manage') && (peripheral || manualWorkstation || nodeMissing) ? '' : 'none';
+        byId('detailMoreMenu').classList.toggle('inv-hidden', byId('deleteButton').style.display === 'none');
+        state.detailBaseline = JSON.stringify(detailFormValue());
+        setDetailDirty(false);
     }
 
     function openAsset(id) {
@@ -1137,19 +1244,8 @@
         send('get', { assetId: id });
     }
 
-    function closeDetail() {
-        state.selected = null;
-        setAssetUrl('');
-        byId('detail').classList.remove('open');
-        byId('dashboard').classList.remove('hidden');
-        renderSummary();
-        renderRows();
-        if (boot.mode === 'device') return;
-        try { history.replaceState(null, '', location.pathname + location.search); } catch (error) { }
-    }
-
-    function saveAsset() {
-        if (!state.selected) return;
+    function detailFormValue() {
+        if (!state.selected) return {};
         var changes = {
             status: byId('statusInput').value,
             assetTag: byId('assetTagInput').value,
@@ -1175,35 +1271,47 @@
             changes.osName = byId('workstationOsInput').value;
             changes.assignedUser = byId('workstationUserInput').value;
         }
-        var asset = state.selected;
-        var manual = asset.manual || {};
-        var current = {
-            status: value(asset.status),
-            assetTag: value(manual.assetTag),
-            location: value(manual.location),
-            purchaseDate: value(manual.purchaseDate),
-            warrantyEnd: value(manual.warrantyEnd),
-            notes: value(manual.notes)
-        };
-        if (isPeripheral(asset)) {
-            current.peripheralType = value(asset.peripheral && asset.peripheral.type);
-            current.name = value(asset.name);
-            current.serial = value(asset.identity && asset.identity.serial);
-            current.manufacturer = value(asset.peripheral && asset.peripheral.manufacturer);
-            current.model = value(asset.peripheral && asset.peripheral.model);
-            current.assignedUser = value((asset.assignment && asset.assignment.assignees && asset.assignment.assignees[0]) && (asset.assignment.assignees[0].display || asset.assignment.assignees[0].id));
-            current.linkedWorkstation = value(asset.links && asset.links.workstationAssetId);
-        } else if (isManualWorkstation(asset)) {
-            current.name = value(asset.name);
-            current.serial = value(asset.identity && asset.identity.serial);
-            current.uuid = value(asset.identity && asset.identity.uuid);
-            current.manufacturer = value(asset.manualHardware && asset.manualHardware.manufacturer);
-            current.model = value(asset.manualHardware && asset.manualHardware.model);
-            current.osName = value(asset.manualHardware && asset.manualHardware.osName);
-            current.assignedUser = value((asset.assignment && asset.assignment.assignees && asset.assignment.assignees[0]) && (asset.assignment.assignees[0].display || asset.assignment.assignees[0].id));
-        }
-        var changed = Object.keys(changes).some(function (key) { return value(changes[key]) !== value(current[key]); });
-        if (!changed) {
+        return changes;
+    }
+
+    function setDetailDirty(dirty) {
+        state.detailDirty = dirty === true;
+        byId('saveButton').disabled = !state.detailDirty;
+        byId('revertButton').disabled = !state.detailDirty;
+    }
+
+    function updateDetailDirty() {
+        if (!state.selected) return;
+        setDetailDirty(JSON.stringify(detailFormValue()) !== state.detailBaseline);
+    }
+
+    function revertDetail() {
+        if (state.selected) renderDetail(state.selected);
+    }
+
+    function requestCloseDetail() {
+        if (state.detailDirty && !window.confirm('Discard your unsaved changes?')) return false;
+        closeDetail();
+        return true;
+    }
+
+    function closeDetail() {
+        state.selected = null;
+        state.detailBaseline = '';
+        state.detailDirty = false;
+        setAssetUrl('');
+        byId('detail').classList.remove('open');
+        byId('dashboard').classList.remove('hidden');
+        renderSummary();
+        renderRows();
+        if (boot.mode === 'device') return;
+        try { history.replaceState(null, '', location.pathname + location.search); } catch (error) { }
+    }
+
+    function saveAsset() {
+        if (!state.selected) return;
+        var changes = detailFormValue();
+        if (!state.detailDirty) {
             showToast('No changes to save.');
             return;
         }
@@ -1290,16 +1398,20 @@
     function resetWorkstationForm() {
         ['addWorkstationName', 'addWorkstationAssetTag', 'addWorkstationSerial', 'addWorkstationUuid', 'addWorkstationManufacturer', 'addWorkstationModel', 'addWorkstationOs', 'addWorkstationUser', 'addWorkstationLocation', 'addWorkstationPurchaseDate', 'addWorkstationWarrantyEnd', 'addWorkstationNotes'].forEach(function (id) { byId(id).value = ''; });
         byId('addWorkstationStatus').value = 'Available';
+        byId('workstationModal').querySelectorAll('.inv-form-group[open]').forEach(function (group) { group.open = false; });
     }
 
     function openWorkstationModal() {
         resetWorkstationForm();
+        state.modalTrigger = document.activeElement;
         byId('workstationModal').classList.remove('inv-hidden');
         byId('addWorkstationName').focus();
     }
 
     function closeWorkstationModal() {
         byId('workstationModal').classList.add('inv-hidden');
+        if (state.modalTrigger && state.modalTrigger.focus) state.modalTrigger.focus();
+        state.modalTrigger = null;
     }
 
     function workstationFormValue() {
@@ -1321,6 +1433,11 @@
     }
 
     function saveWorkstation() {
+        if (!byId('addWorkstationName').value.trim()) {
+            showToast('Enter a workstation name.', true);
+            byId('addWorkstationName').focus();
+            return;
+        }
         send('workstation-create', { workstation: workstationFormValue() });
     }
 
@@ -1329,12 +1446,14 @@
         byId('addType').value = state.peripheralTypes[0] || 'Mouse';
         byId('addWorkstation').value = '';
         byId('addStatus').value = 'Available';
+        byId('peripheralModal').querySelectorAll('.inv-form-group[open]').forEach(function (group) { group.open = false; });
     }
 
     function openPeripheralModal() {
         populateTypes(byId('addType'), state.peripheralTypes[0]);
         populateWorkstations(byId('addWorkstation'), '');
         resetPeripheralForm();
+        state.modalTrigger = document.activeElement;
         byId('peripheralModal').classList.remove('inv-hidden');
         byId('addType').focus();
     }
@@ -1342,6 +1461,8 @@
     function closePeripheralModal() {
         byId('peripheralModal').classList.add('inv-hidden');
         state.keepAddAnother = false;
+        if (state.modalTrigger && state.modalTrigger.focus) state.modalTrigger.focus();
+        state.modalTrigger = null;
     }
 
     function peripheralFormValue() {
@@ -1404,6 +1525,8 @@
         byId('importModal').classList.add('inv-hidden');
         state.importRows = [];
         state.importPreview = [];
+        if (state.modalTrigger && state.modalTrigger.focus) state.modalTrigger.focus();
+        state.modalTrigger = null;
     }
 
     function renderImportPreview(rows) {
@@ -1425,6 +1548,7 @@
         });
         byId('confirmImport').disabled = invalid > 0 || state.importPreview.length === 0;
         byId('importModal').classList.remove('inv-hidden');
+        byId('closeImportModal').focus();
     }
 
     function selectCsvFile(event) {
@@ -1616,6 +1740,13 @@
         state.peripheralTypes.forEach(function (type) { byId('typeFilter').appendChild(new Option(type, type)); });
         byId('workstationsTab').addEventListener('click', function () { setActiveTab('workstations', true); });
         byId('peripheralsTab').addEventListener('click', function () { setActiveTab('peripherals', true); });
+        byId('inventoryTabs').addEventListener('keydown', function (event) {
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+            event.preventDefault();
+            var next = state.activeTab === 'workstations' ? 'peripherals' : 'workstations';
+            setActiveTab(next, true);
+            byId(next === 'workstations' ? 'workstationsTab' : 'peripheralsTab').focus();
+        });
         byId('searchInput').addEventListener('input', function () { state.page = 1; renderRows(); });
         byId('statusFilter').addEventListener('change', function () { state.page = 1; state.cardFilter = ''; renderSummary(); renderRows(); });
         byId('typeFilter').addEventListener('change', function () { state.page = 1; renderRows(); });
@@ -1626,10 +1757,14 @@
         byId('previousPage').addEventListener('click', function () { if (state.page > 1) { state.page--; renderRows(); } });
         byId('nextPage').addEventListener('click', function () { var pages = Math.max(1, Math.ceil(filteredAssets().length / state.pageSize)); if (state.page < pages) { state.page++; renderRows(); } });
         byId('saveButton').addEventListener('click', saveAsset);
-        byId('deleteButton').addEventListener('click', deleteAsset);
-        byId('exportButton').addEventListener('click', exportCsv);
+        byId('revertButton').addEventListener('click', revertDetail);
+        byId('backToInventoryButton').addEventListener('click', requestCloseDetail);
+        byId('detail').addEventListener('input', updateDetailDirty);
+        byId('detail').addEventListener('change', updateDetailDirty);
+        byId('deleteButton').addEventListener('click', function () { byId('detailMoreMenu').open = false; deleteAsset(); });
+        byId('exportButton').addEventListener('click', function () { byId('dashboardMoreMenu').open = false; exportCsv(); });
         byId('rescanButton').addEventListener('click', function () { send('rescan', {}); });
-        byId('settingsButton').addEventListener('click', function () { byId('settingsPanel').classList.toggle('inv-hidden'); });
+        byId('settingsButton').addEventListener('click', function () { byId('dashboardMoreMenu').open = false; byId('settingsPanel').classList.toggle('inv-hidden'); });
         byId('saveSettings').addEventListener('click', function () {
             send('settings-update', { settings: {
                 mode: byId('staleMode').value,
@@ -1649,8 +1784,8 @@
         byId('closeWorkstationModal').addEventListener('click', closeWorkstationModal);
         byId('cancelWorkstation').addEventListener('click', closeWorkstationModal);
         byId('saveWorkstation').addEventListener('click', saveWorkstation);
-        byId('templateButton').addEventListener('click', downloadPeripheralTemplate);
-        byId('importButton').addEventListener('click', function () { byId('importFileInput').click(); });
+        byId('templateButton').addEventListener('click', function () { byId('dashboardMoreMenu').open = false; downloadPeripheralTemplate(); });
+        byId('importButton').addEventListener('click', function () { state.modalTrigger = byId('dashboardMoreMenu').querySelector('summary'); byId('dashboardMoreMenu').open = false; byId('importFileInput').click(); });
         byId('importFileInput').addEventListener('change', selectCsvFile);
         byId('addPeripheralButton').addEventListener('click', openPeripheralModal);
         byId('closePeripheralModal').addEventListener('click', closePeripheralModal);
@@ -1679,6 +1814,31 @@
         byId('openDeviceButton').addEventListener('click', function () {
             if (state.selected && state.selected.nodeid && window.parent.gotoDevice) window.parent.gotoDevice(state.selected.nodeid, 10);
         });
+        document.addEventListener('keydown', function (event) {
+            var modal = document.querySelector('.inv-modal-backdrop:not(.inv-hidden)');
+            if (event.key === 'Escape') {
+                if (modal) {
+                    event.preventDefault();
+                    if (modal.id === 'workstationModal') closeWorkstationModal();
+                    else if (modal.id === 'peripheralModal') closePeripheralModal();
+                    else if (modal.id === 'importModal') closeImportModal();
+                } else {
+                    byId('dashboardMoreMenu').open = false;
+                    byId('detailMoreMenu').open = false;
+                }
+                return;
+            }
+            if (event.key !== 'Tab' || !modal) return;
+            var focusable = Array.prototype.slice.call(modal.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], summary, [tabindex]:not([tabindex="-1"])')).filter(function (element) { return element.offsetParent !== null; });
+            if (!focusable.length) return;
+            var first = focusable[0], last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        });
+        document.addEventListener('click', function (event) {
+            if (!event.target.closest('#dashboardMoreMenu')) byId('dashboardMoreMenu').open = false;
+            if (!event.target.closest('#detailMoreMenu')) byId('detailMoreMenu').open = false;
+        });
         if (boot.mode === 'device') {
             byId('inventoryTabs').classList.add('inv-hidden');
         }
@@ -1691,7 +1851,7 @@
         refresh: function () { send('list', {}); },
         showDashboard: function () {
             byId('settingsPanel').classList.add('inv-hidden');
-            if (state.selected) closeDetail();
+            if (state.selected) return requestCloseDetail();
             else {
                 setAssetUrl('');
                 byId('detail').classList.remove('open');
@@ -1703,8 +1863,7 @@
         },
         back: function () {
             if (!state.selected) return false;
-            closeDetail();
-            return true;
+            return requestCloseDetail();
         }
     };
     initialize();
