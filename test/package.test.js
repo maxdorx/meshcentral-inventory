@@ -1282,6 +1282,12 @@ test('dashboard actions share the inventory tab row, settings use a modal, and d
     assert.match(view, /id="cancelSettings"/);
     assert.match(view, /function openSettingsModal\(\)/);
     assert.match(view, /\.inv-modal-backdrop \{[^}]*inset: 0 0 66px/s);
+    assert.doesNotMatch(view, /id="backToInventoryButton"/);
+    assert.match(view, /id="activityIndicator"/);
+    assert.match(view, /Synchronizing devices… This can take a few minutes\./);
+    assert.match(view, /Preparing Inventory backup…/);
+    assert.match(view, /Validating and restoring Inventory backup…/);
+    assert.match(view, /setAttribute\('aria-busy'/);
     assert.match(view, /id="downloadBackupButton"/);
     assert.match(view, /id="restoreBackupButton"/);
     assert.match(view, /new Blob\(\[text\]/);

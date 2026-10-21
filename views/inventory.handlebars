@@ -120,15 +120,13 @@
         .inv-review-badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 3px 8px; background: rgba(255, 193, 7, .14); color: var(--bs-warning-text-emphasis, #ffda6a); font-size: 12px; font-weight: 650; }
         .inv-review { color: var(--bs-warning, #ffc107); font-weight: 650; }
         .inv-empty { padding: 42px 16px; text-align: center; color: var(--inv-muted); }
-        .inv-loading { opacity: .65; pointer-events: none; }
+        .inv-loading .inv-dashboard, .inv-loading .inv-detail { pointer-events: none; }
         .inv-detail { display: none; }
         .inv-detail.open {
             display: block; height: 100%; overflow: auto; overscroll-behavior: contain;
             margin-right: calc(0px - var(--inv-gutter)); padding-right: var(--inv-gutter); padding-bottom: 16px;
         }
         .inv-detail > .inv-header { position: sticky; top: 0; z-index: 5; margin: 0 0 14px; padding: 10px 0 12px; background: var(--bs-body-bg, #1f1f1f); border-bottom: 1px solid var(--inv-border); }
-        .inv-back { display: inline-flex; margin-bottom: 7px; border: 0; padding: 0; background: transparent; color: var(--inv-muted) !important; cursor: pointer; }
-        .inv-back:hover { color: var(--inv-accent) !important; }
         .inv-dashboard.hidden { display: none; }
         .inv-detail-grid { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr); gap: 12px; }
         .inv-section { border: 1px solid color-mix(in srgb, var(--inv-border) 75%, transparent); border-radius: 10px; background: var(--inv-surface); padding: 16px; margin-bottom: 12px; }
@@ -160,8 +158,15 @@
         .inv-history { max-height: none; overflow: visible; }
         .inv-history-item { border-left: 2px solid var(--inv-accent); padding: 2px 0 10px 10px; margin-left: 4px; }
         .inv-history-action { font-weight: 650; }
-        .inv-toast { position: fixed; right: 18px; bottom: 18px; max-width: 440px; padding: 11px 14px; border-radius: 6px; background: #222; color: #fff; box-shadow: 0 4px 22px rgba(0,0,0,.35); display: none; z-index: 20; }
+        .inv-toast { position: fixed; right: 18px; bottom: 84px; max-width: 440px; padding: 11px 14px; border-radius: 6px; background: #222; color: #fff; box-shadow: 0 4px 22px rgba(0,0,0,.35); display: none; z-index: 70; }
         .inv-toast.error { background: #842029; }
+        .inv-activity { position: fixed; inset: 0 0 66px; z-index: 60; display: flex; align-items: flex-start; justify-content: center; padding: 22px; background: rgba(0,0,0,.38); cursor: progress; }
+        .inv-activity-card { width: min(440px, 100%); padding: 13px 15px; border: 1px solid var(--inv-border); border-radius: 10px; background: var(--bs-body-bg, #202124); box-shadow: 0 12px 36px rgba(0,0,0,.45); }
+        .inv-activity-message { margin-bottom: 9px; font-weight: 650; }
+        .inv-progress-track { height: 4px; overflow: hidden; border-radius: 999px; background: var(--inv-surface); }
+        .inv-progress-track::after { content: ''; display: block; width: 38%; height: 100%; border-radius: inherit; background: var(--inv-accent); animation: inv-progress 1.15s ease-in-out infinite; }
+        @keyframes inv-progress { from { transform: translateX(-105%); } to { transform: translateX(265%); } }
+        @media (prefers-reduced-motion: reduce) { .inv-progress-track::after { width: 100%; animation: none; } }
         .inv-modal-backdrop { position: fixed; inset: 0 0 66px; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(0,0,0,.68); }
         .inv-modal { width: min(920px, 100%); max-height: calc(100vh - 106px); overflow: auto; overscroll-behavior: contain; border: 1px solid var(--inv-border); border-radius: 12px; background: var(--bs-body-bg, #202124); color: inherit; box-shadow: 0 16px 50px rgba(0,0,0,.5); }
         .inv-settings-panel h3 { margin: 0 0 12px; font-size: 15px; }
@@ -315,7 +320,6 @@
     <section class="inv-detail" id="detail">
         <header class="inv-header">
             <div>
-                <button class="inv-back" id="backToInventoryButton" type="button">← Inventory</button>
                 <h1 class="inv-title" id="detailTitle">Asset</h1>
                 <div class="inv-subtitle" id="detailSubtitle"></div>
             </div>
@@ -392,6 +396,12 @@
             </div>
         </div>
     </section>
+</div>
+<div class="inv-activity inv-hidden" id="activityIndicator" role="status" aria-live="assertive" aria-atomic="true">
+    <div class="inv-activity-card">
+        <div class="inv-activity-message" id="activityMessage">Working…</div>
+        <div class="inv-progress-track" aria-hidden="true"></div>
+    </div>
 </div>
 <div class="inv-toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
@@ -570,9 +580,40 @@
         setTimeout(function () { toast.style.display = 'none'; }, 4500);
     }
 
-    function setLoading(loading) {
+    function loadingMessage(action) {
+        var messages = {
+            'list': 'Refreshing inventory…',
+            'get': 'Opening asset…',
+            'rescan': 'Synchronizing devices… This can take a few minutes.',
+            'backup-export': 'Preparing Inventory backup…',
+            'backup-restore': 'Validating and restoring Inventory backup…',
+            'settings-update': 'Saving Inventory settings…',
+            'update': 'Saving asset changes…',
+            'delete': 'Deleting inventory record…',
+            'assignment': 'Updating assignment…',
+            'identity': 'Updating hardware identity…',
+            'review': 'Updating review status…',
+            'workstation-create': 'Adding workstation…',
+            'peripheral-create': 'Adding peripheral…',
+            'peripheral-preview': 'Validating CSV import…',
+            'peripheral-import': 'Importing peripherals…'
+        };
+        return messages[action] || 'Working…';
+    }
+
+    function setLoading(loading, action) {
         state.loading = loading;
         byId('inventoryRoot').classList.toggle('inv-loading', loading);
+        byId('inventoryRoot').setAttribute('aria-busy', loading ? 'true' : 'false');
+        var indicator = byId('activityIndicator');
+        indicator.classList.toggle('inv-hidden', !loading);
+        if (loading) {
+            if (!action) {
+                var pendingId = Object.keys(state.pendingRequests)[0];
+                action = pendingId && state.pendingRequests[pendingId] ? state.pendingRequests[pendingId].action : '';
+            }
+            byId('activityMessage').textContent = loadingMessage(action);
+        }
     }
 
     function send(action, payload, connectionAttempt, responseAttempt) {
@@ -598,7 +639,7 @@
             state.pendingListRequestId = message.requestId;
         }
         state.pendingRequests[message.requestId] = { action: action };
-        setLoading(true);
+        setLoading(true, action);
         window.parent.meshserver.send(message);
         if (action === 'list') {
             var sentRequestId = message.requestId;
@@ -1733,6 +1774,7 @@
             state.selected = null;
             byId('detail').classList.remove('open');
             byId('dashboard').classList.remove('hidden');
+            closeSettingsModal();
             showToast('Inventory backup restored: ' + result.restored + ' records restored, ' + result.removed + ' replaced records removed.');
             send('list', {});
         }
@@ -1783,7 +1825,6 @@
         byId('nextPage').addEventListener('click', function () { var pages = Math.max(1, Math.ceil(filteredAssets().length / state.pageSize)); if (state.page < pages) { state.page++; renderRows(); } });
         byId('saveButton').addEventListener('click', saveAsset);
         byId('revertButton').addEventListener('click', revertDetail);
-        byId('backToInventoryButton').addEventListener('click', requestCloseDetail);
         byId('detail').addEventListener('input', updateDetailDirty);
         byId('detail').addEventListener('change', updateDetailDirty);
         byId('deleteButton').addEventListener('click', function () { byId('detailMoreMenu').open = false; deleteAsset(); });
