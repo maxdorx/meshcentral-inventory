@@ -19,6 +19,7 @@ New-Item -ItemType Directory -Path (Join-Path $stage "views") -Force | Out-Null
 
 Copy-Item -LiteralPath (Join-Path $project "inventory.js") -Destination $stage
 Copy-Item -LiteralPath (Join-Path $project "config.json") -Destination $stage
+Copy-Item -LiteralPath (Join-Path $project "CHANGELOG.md") -Destination $stage
 Copy-Item -LiteralPath (Join-Path $project "README.md") -Destination $stage
 Copy-Item -LiteralPath (Join-Path $project "LICENSE") -Destination $stage
 Copy-Item -LiteralPath (Join-Path $project "lib\model.js") -Destination (Join-Path $stage "lib")

@@ -1,11 +1,12 @@
 {
   "name": "Inventory",
   "shortName": "inventory",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "author": "maxdorx",
   "description": "Workstation lifecycle from MeshCentral agent details plus manual peripheral inventory and CSV import.",
   "hasAdminPanel": true,
   "homepage": "https://github.com/maxdorx/meshcentral-inventory",
+  "changelogUrl": "https://raw.githubusercontent.com/maxdorx/meshcentral-inventory/main/CHANGELOG.md",
   "configUrl": "https://raw.githubusercontent.com/maxdorx/meshcentral-inventory/main/config.json",
   "downloadUrl": "https://raw.githubusercontent.com/maxdorx/meshcentral-inventory/inventory-current/release-assets/MeshCentral-Inventory.zip",
   "repository": {
