@@ -2,6 +2,65 @@
 
 Inventory and lifecycle management for MeshCentral workstations and peripherals.
 
+## Preview
+
+<p align="center">
+  <a href="./docs/screenshots/gallery/workstations-dashboard.png">
+    <img src="./docs/screenshots/gallery/workstations-dashboard.png" alt="Inventory workstation dashboard" width="100%">
+  </a>
+</p>
+
+<p align="center"><sub>Live workstation inventory with lifecycle totals, filters, assignment, connectivity, and review state. Production identifiers are redacted.</sub></p>
+
+### Screenshot tour
+
+Swipe or scroll horizontally to browse. Select any screenshot to open it full size.
+
+<table>
+  <tr>
+    <td width="760" valign="top">
+      <a href="./docs/screenshots/gallery/workstations-review-filter.png"><img src="./docs/screenshots/gallery/workstations-review-filter.png" alt="Workstations filtered by review state" width="760"></a><br>
+      <sub><b>Review workflow</b><br>Filter devices that need administrator attention.</sub>
+    </td>
+    <td width="760" valign="top">
+      <a href="./docs/screenshots/gallery/peripherals-dashboard.png"><img src="./docs/screenshots/gallery/peripherals-dashboard.png" alt="Peripheral inventory dashboard" width="760"></a><br>
+      <sub><b>Peripheral inventory</b><br>Track manually managed peripherals and their assignments.</sub>
+    </td>
+    <td width="760" valign="top">
+      <a href="./docs/screenshots/gallery/workstation-lifecycle-assignment.png"><img src="./docs/screenshots/gallery/workstation-lifecycle-assignment.png" alt="Workstation lifecycle and assignment details" width="760"></a><br>
+      <sub><b>Lifecycle and assignment</b><br>Manage status, ownership, dates, location, and audit history.</sub>
+    </td>
+    <td width="760" valign="top">
+      <a href="./docs/screenshots/gallery/workstation-hardware-identity.png"><img src="./docs/screenshots/gallery/workstation-hardware-identity.png" alt="Workstation hardware identity details" width="760"></a><br>
+      <sub><b>Hardware identity</b><br>Inspect serial, UUID, model, operating system, and agent state.</sub>
+    </td>
+    <td width="760" valign="top">
+      <a href="./docs/screenshots/gallery/peripheral-lifecycle-assignment.png"><img src="./docs/screenshots/gallery/peripheral-lifecycle-assignment.png" alt="Peripheral lifecycle and audit history" width="760"></a><br>
+      <sub><b>Peripheral lifecycle</b><br>Record manual assignment and retain a clear audit trail.</sub>
+    </td>
+    <td width="760" valign="top">
+      <a href="./docs/screenshots/gallery/peripheral-linked-workstation.png"><img src="./docs/screenshots/gallery/peripheral-linked-workstation.png" alt="Peripheral linked workstation details" width="760"></a><br>
+      <sub><b>Workstation links</b><br>Associate a peripheral with its workstation when needed.</sub>
+    </td>
+    <td width="760" valign="top">
+      <a href="./docs/screenshots/gallery/peripheral-actions-menu.png"><img src="./docs/screenshots/gallery/peripheral-actions-menu.png" alt="Inventory actions menu" width="760"></a><br>
+      <sub><b>Inventory actions</b><br>Export, import, download templates, and open settings.</sub>
+    </td>
+    <td width="760" valign="top">
+      <a href="./docs/screenshots/gallery/inventory-settings-policy.png"><img src="./docs/screenshots/gallery/inventory-settings-policy.png" alt="Inventory stale-device policy settings" width="760"></a><br>
+      <sub><b>Inventory policy</b><br>Configure stale-device detection and ignored accounts.</sub>
+    </td>
+    <td width="760" valign="top">
+      <a href="./docs/screenshots/gallery/inventory-backup-restore.png"><img src="./docs/screenshots/gallery/inventory-backup-restore.png" alt="Inventory backup and restore settings" width="760"></a><br>
+      <sub><b>Backup and restore</b><br>Download or restore all Inventory-owned records.</sub>
+    </td>
+    <td width="760" valign="top">
+      <a href="./docs/screenshots/gallery/plugin-installed.png"><img src="./docs/screenshots/gallery/plugin-installed.png" alt="Inventory installed in MeshCentral plugins" width="760"></a><br>
+      <sub><b>Native integration</b><br>Installed and updated through MeshCentral's plugin manager.</sub>
+    </td>
+  </tr>
+</table>
+
 ## Features
 
 - Automatically discovers agent-backed workstations.
