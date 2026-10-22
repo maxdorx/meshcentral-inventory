@@ -1855,3 +1855,28 @@ test('plugin package contains no software-inventory collector', () => {
     assert.equal(server.includes('installedapps'), false);
     assert.equal(model.includes('installedapps'), false);
 });
+
+test('release ZIP declares parent directories before nested plugin files', () => {
+    const archive = fs.readFileSync(path.join(root, 'release-assets', 'MeshCentral-Inventory.zip'));
+    const endSignature = Buffer.from([0x50, 0x4b, 0x05, 0x06]);
+    const endOffset = archive.lastIndexOf(endSignature);
+    assert.notEqual(endOffset, -1, 'ZIP end-of-central-directory record');
+
+    const entryCount = archive.readUInt16LE(endOffset + 10);
+    let offset = archive.readUInt32LE(endOffset + 16);
+    const entries = [];
+    for (let index = 0; index < entryCount; index++) {
+        assert.equal(archive.readUInt32LE(offset), 0x02014b50, `central directory entry ${index}`);
+        const nameLength = archive.readUInt16LE(offset + 28);
+        const extraLength = archive.readUInt16LE(offset + 30);
+        const commentLength = archive.readUInt16LE(offset + 32);
+        entries.push(archive.subarray(offset + 46, offset + 46 + nameLength).toString('utf8'));
+        offset += 46 + nameLength + extraLength + commentLength;
+    }
+
+    for (const directory of ['inventory/', 'inventory/lib/', 'inventory/views/']) {
+        assert.ok(entries.includes(directory), `${directory} must be an explicit ZIP entry`);
+    }
+    assert.ok(entries.indexOf('inventory/lib/') < entries.indexOf('inventory/lib/model.js'));
+    assert.ok(entries.indexOf('inventory/views/') < entries.indexOf('inventory/views/inventory.handlebars'));
+});

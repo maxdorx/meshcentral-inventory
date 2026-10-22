@@ -41,6 +41,13 @@ try {
         $false
     )
     try {
+        # MeshCentral's installer expects directory entries to appear before files
+        # and does not create a file's missing parent directories automatically.
+        $zip.CreateEntry('inventory/') | Out-Null
+        Get-ChildItem -LiteralPath $stage -Recurse -Directory | Sort-Object FullName | ForEach-Object {
+            $relative = 'inventory/' + $_.FullName.Substring($stage.Length).TrimStart([char[]]'\/').Replace('\', '/') + '/'
+            $zip.CreateEntry($relative) | Out-Null
+        }
         Get-ChildItem -LiteralPath $stage -Recurse -File | ForEach-Object {
             $relative = 'inventory/' + $_.FullName.Substring($stage.Length).TrimStart([char[]]'\/').Replace('\', '/')
             [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(

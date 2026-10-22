@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-test('manifest has the fields required by the MeshCentral 1.2.5 and 1.2.6 plugin loader', () => {
+test('manifest has the fields required by the MeshCentral plugin loader', () => {
     const config = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'config.json'), 'utf8'));
     for (const field of ['name', 'shortName', 'version', 'description', 'homepage', 'changelogUrl', 'configUrl', 'meshCentralCompat']) {
         assert.equal(typeof config[field], 'string', field);
@@ -13,7 +13,7 @@ test('manifest has the fields required by the MeshCentral 1.2.5 and 1.2.6 plugin
     }
     assert.equal(config.shortName, 'inventory');
     assert.equal(config.name, 'Inventory');
-    assert.equal(config.version, '1.4.3');
+    assert.equal(config.version, '1.4.4');
     assert.equal(config.hasAdminPanel, true);
     assert.equal(config.repository.type, 'git');
     assert.equal(typeof config.repository.url, 'string');

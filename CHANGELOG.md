@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.4 - 2026-10-22
+
+- Include explicit `inventory/`, `inventory/lib/`, and `inventory/views/` directory entries in the release ZIP so fresh MeshCentral 1.3.0 installations can extract nested plugin files.
+- Add regression coverage for the ZIP structure expected by MeshCentral's plugin installer.
+
 ## 1.4.3 - 2026-10-21
 
 - Add the `changelogUrl` manifest field required by the MeshCentral plugin loader.
